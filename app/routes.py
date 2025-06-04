@@ -55,7 +55,7 @@ def latex_to_svg(latex_string):
         try:
             # Run pdflatex to create PDF
             result = subprocess.run(
-                ["pdflatex", "-interaction=nonstopmode", "-output-directory", temp_dir, tex_file],
+                ["pdflatex", "-shell-escape", "-interaction=nonstopmode", "-output-directory", temp_dir, tex_file],
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -89,9 +89,7 @@ def latex_to_svg(latex_string):
             info_svg = f'''<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="400" height="80" viewBox="0 0 400 80">
     <rect width="400" height="80" fill="#f8f9fa" stroke="#dee2e6" stroke-width="1" rx="5" ry="5"/>
-    <text x="50%" y="30" text-anchor="middle" font-family="Arial" font-size="14" fill="#495057">Complex LaTeX Content</text>
-    <text x="50%" y="55" text-anchor="middle" font-family="Arial" font-size="12" fill="#6c757d">Preview not available. Please test in TeX Studio</text>
-    <text x="50%" y="70" text-anchor="middle" font-family="Arial" font-size="12" fill="#6c757d">or Overleaf before submitting.</text>
+    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="14" fill="#495057">Complex LaTeX, please compile in Overleaf or TeXstudio before submitting.</text>
 </svg>'''
             base64_data = base64.b64encode(info_svg.encode()).decode("ascii")
             return f"data:image/svg+xml;base64,{base64_data}"
@@ -168,6 +166,11 @@ def add_question():
         
         # Combine both sets of tags and remove duplicates
         combined_tags = list(set(input_tags + selected_tags))
+        
+        # Ensure at least one tag is provided
+        if not combined_tags:
+            flash('Please provide at least one tag for the question.', 'error')
+            return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
         
         # Generate unique ID for the question
         question_id = str(uuid.uuid4())
@@ -258,6 +261,11 @@ def edit_question(question_id):
         
         # Combine both sets of tags and remove duplicates
         combined_tags = list(set(input_tags + selected_tags))
+        
+        # Ensure at least one tag is provided
+        if not combined_tags:
+            flash('Please provide at least one tag for the question.', 'error')
+            return render_template('edit_question.html', form=form, attachment_form=attachment_form, question=question, all_tags=all_tags)
         
         # Generate unique ID for the new question
         new_question_id = str(uuid.uuid4())

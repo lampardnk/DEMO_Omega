@@ -210,7 +210,7 @@
             if (latex.includes('\\begin{tikzpicture}') ||
                 latex.includes('\\begin{circuitikz}') ||
                 latex.includes('\\begin{scope}')) {
-                mathPreview.innerHTML = '<div class="alert alert-info">TikZ/CircuiTikZ diagram detected. Preview not available. Will be rendered when saved.</div>';
+                mathPreview.innerHTML = '<div class="alert alert-info">Complex LaTeX, please compile in Overleaf or TeXstudio before submitting.</div>';
                 return;
             }
 

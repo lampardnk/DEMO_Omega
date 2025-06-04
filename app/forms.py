@@ -10,7 +10,7 @@ class QuestionForm(FlaskForm):
                                      NumberRange(min=1.0, max=10.0, 
                                                 message='Rating must be between 1.0 and 10.0')],
                           places=1)
-    tags = StringField('Tags (comma-separated)', validators=[DataRequired()])
+    tags = StringField('Tags (comma-separated)', validators=[Optional()])
     submit = SubmitField('Add Question')
 
 class AttachmentForm(FlaskForm):
