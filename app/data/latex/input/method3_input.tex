@@ -1,0 +1,72 @@
+\documentclass{article}
+\usepackage{fontspec}
+\usepackage{unicode-math}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usepackage{circuitikz}
+\usepackage{exam}
+\usepackage{array}
+\usepackage{booktabs}
+
+\begin{document}
+
+\title{Method 3 - XeLaTeX Test Document}
+\maketitle
+
+\section{Mathematical Content with Unicode}
+Complex equation: $\nabla \times \vec{E} = -\frac{\partial \vec{B}}{\partial t}$
+
+Unicode math: $α + β = γ$ and $∮ \vec{E} \cdot d\vec{l} = -\frac{d}{dt}\int_S \vec{B} \cdot \vec{n} da$
+
+\begin{align}
+E &= mc^2\\
+F &= ma\\
+∇ × E &= -∂B/∂t
+\end{align}
+
+\section{TikZ Graphics}
+\begin{tikzpicture}
+\draw[->] (-2,0) -- (2,0) node[right] {$x$};
+\draw[->] (0,-2) -- (0,2) node[above] {$y$};
+\draw[domain=-1.5:1.5,smooth,variable=\x,blue] plot ({\x},{{\x}^2-1});
+\draw (0,0) circle (1cm);
+\end{tikzpicture}
+
+\section{Circuit Diagrams}
+\begin{circuitikz}
+\draw (0,0) to[V,v=$V_s$] (0,2) to[R,l=$R_1$] (2,2) to[R,l=$R_2$] (2,0) -- (0,0);
+\draw (2,2) to[C,l=$C$] (4,2) to[L,l=$L$] (4,0) -- (2,0);
+\end{circuitikz}
+
+\section{Tabular Data}
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+Method & Speed & Quality \\
+\hline
+pdflatex & Fast & Good \\
+xelatex & Medium & Excellent \\
+lualatex & Medium & Very Good \\
+\hline
+\end{tabular}
+\caption{Comparison of LaTeX engines}
+\end{table}
+
+\section{Exam Questions}
+\begin{questions}
+\question What is the derivative of $x^2$?
+\begin{parts}
+\part $2x$
+\part $x$
+\part $2x^2$
+\end{parts}
+
+\question Solve for $x$: $2x + 5 = 11$
+\begin{subparts}
+\subpart Show your work
+\subpart Verify your answer
+\end{subparts}
+\end{questions}
+
+\end{document}
