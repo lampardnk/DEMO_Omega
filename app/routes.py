@@ -8,13 +8,9 @@ from flask import render_template, request, redirect, url_for, jsonify, flash, s
 from werkzeug.utils import secure_filename
 from app import app
 from app.forms import QuestionForm, AttachmentForm
-import matplotlib.pyplot as plt
-import numpy as np
-import io
-import base64
 import uuid
 from decimal import Decimal
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import base64
 
 # Custom JSON encoder to handle Decimal objects
 class DecimalEncoder(json.JSONEncoder):
@@ -28,7 +24,6 @@ def load_questions(include_deleted=False):
         with open(app.config['QUESTIONS_FILE'], 'r') as f:
             questions = json.load(f)
             if not include_deleted:
-                # Filter out questions marked as deleted
                 questions = [q for q in questions if not q.get('deleted', False)]
             return questions
     return []
@@ -46,116 +41,60 @@ def get_all_tags():
             all_tags.add(tag)
     return sorted(all_tags)
 
-def check_latex_packages(latex_content):
-    """Check if the LaTeX content requires special packages"""
-    needs_tikz = "\\begin{tikzpicture}" in latex_content or "\\tikz" in latex_content
-    needs_circuitikz = "\\begin{circuitikz}" in latex_content
-    needs_scope = "\\begin{scope}" in latex_content
-    
-    return needs_tikz, needs_circuitikz, needs_scope
-
 def latex_to_svg(latex_string):
-    """
-    Convert LaTeX to SVG image
-    Will use matplotlib for simple LaTeX and a full LaTeX compiler for complex environments like TikZ
-    """
-    # Check if we need special LaTeX packages
-    needs_tikz, needs_circuitikz, needs_scope = check_latex_packages(latex_string)
+    """Convert LaTeX to SVG using command line tools without preprocessing.
+    Assumes the input is a complete LaTeX document."""
     
-    # If we need special packages, use a full LaTeX compiler
-    if needs_tikz or needs_circuitikz or needs_scope:
-        return compile_complex_latex(latex_string, needs_tikz, needs_circuitikz, needs_scope)
-    
-    # For simple LaTeX, use matplotlib
-    fig = plt.figure(figsize=(5, 0.5))
-    plt.axis('off')
-    plt.text(0.5, 0.5, f"${latex_string}$", size=14, ha='center', va='center')
-    
-    # Convert the figure to a PNG and then encode to base64
-    buf = io.BytesIO()
-    FigureCanvas(fig).print_png(buf)
-    plt.close(fig)
-    
-    # Return base64 encoded image
-    data = base64.b64encode(buf.getbuffer()).decode("ascii")
-    return f"data:image/png;base64,{data}"
-
-def compile_complex_latex(latex_content, needs_tikz=False, needs_circuitikz=False, needs_scope=False):
-    """Compile complex LaTeX with TikZ, CircuiTikZ, etc. using a full LaTeX compiler"""
-    # Create a temporary directory for LaTeX compilation
+    # Create a temporary directory for processing
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Create the LaTeX document
-        latex_document = []
-        latex_document.append("\\documentclass[border=10pt]{standalone}")
-        latex_document.append("\\usepackage{amsmath,amssymb}")
-        
-        # Add required packages based on content
-        if needs_tikz or needs_scope:
-            latex_document.append("\\usepackage{tikz}")
-        if needs_circuitikz:
-            latex_document.append("\\usepackage{circuitikz}")
-        
-        # Start the document
-        latex_document.append("\\begin{document}")
-        
-        # Add the LaTeX content
-        if needs_tikz or needs_circuitikz or needs_scope:
-            # For TikZ or CircuiTikZ content, add directly
-            latex_document.append(latex_content)
-        else:
-            # For regular math, wrap in equation environment
-            latex_document.append("$" + latex_content + "$")
-        
-        # End the document
-        latex_document.append("\\end{document}")
-        
-        # Write the LaTeX document to a file
-        tex_file = os.path.join(temp_dir, "latex_content.tex")
+        # Write the LaTeX content to a temporary file, adding extra newlines for safety
+        tex_file = os.path.join(temp_dir, "content.tex")
         with open(tex_file, "w") as f:
-            f.write("\n".join(latex_document))
+            f.write(latex_string + "\n\n")
         
         try:
-            # Compile LaTeX to PDF using pdflatex
-            subprocess.run(
+            # Run pdflatex to create PDF
+            result = subprocess.run(
                 ["pdflatex", "-interaction=nonstopmode", "-output-directory", temp_dir, tex_file],
+                check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True,
+                text=True
             )
             
-            # Convert PDF to PNG using pdf2image or another tool
-            pdf_file = os.path.join(temp_dir, "latex_content.pdf")
-            png_file = os.path.join(temp_dir, "latex_content.png")
+            # Convert PDF to SVG using pdf2svg
+            pdf_file = os.path.join(temp_dir, "content.pdf")
+            svg_file = os.path.join(temp_dir, "content.svg")
             
-            # Use pdftoppm or similar to convert PDF to PNG
-            subprocess.run(
-                ["pdftoppm", "-png", "-singlefile", "-r", "300", pdf_file, os.path.join(temp_dir, "latex_content")],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=True,
-            )
+            if os.path.exists(pdf_file):
+                subprocess.run(
+                    ["pdf2svg", pdf_file, svg_file],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                
+                # Read the SVG file
+                with open(svg_file, "r") as f:
+                    svg_content = f.read()
+                
+                # Return base64 encoded SVG
+                base64_data = base64.b64encode(svg_content.encode()).decode("ascii")
+                return f"data:image/svg+xml;base64,{base64_data}"
+            else:
+                raise FileNotFoundError("PDF file was not created")
             
-            # Read the PNG file and convert to base64
-            with open(png_file, "rb") as f:
-                png_data = f.read()
-            
-            # Return base64 encoded image
-            base64_data = base64.b64encode(png_data).decode("ascii")
-            return f"data:image/png;base64,{base64_data}"
-            
-        except subprocess.CalledProcessError as e:
-            # If compilation fails, return error message as image
-            error_text = f"LaTeX compilation error: {e}"
-            fig = plt.figure(figsize=(6, 1))
-            plt.axis('off')
-            plt.text(0.5, 0.5, error_text, color='red', ha='center', va='center')
-            
-            buf = io.BytesIO()
-            FigureCanvas(fig).print_png(buf)
-            plt.close(fig)
-            
-            data = base64.b64encode(buf.getbuffer()).decode("ascii")
-            return f"data:image/png;base64,{data}"
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            # If compilation fails, provide a friendly message
+            info_svg = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="80" viewBox="0 0 400 80">
+    <rect width="400" height="80" fill="#f8f9fa" stroke="#dee2e6" stroke-width="1" rx="5" ry="5"/>
+    <text x="50%" y="30" text-anchor="middle" font-family="Arial" font-size="14" fill="#495057">Complex LaTeX Content</text>
+    <text x="50%" y="55" text-anchor="middle" font-family="Arial" font-size="12" fill="#6c757d">Preview not available. Please test in TeX Studio</text>
+    <text x="50%" y="70" text-anchor="middle" font-family="Arial" font-size="12" fill="#6c757d">or Overleaf before submitting.</text>
+</svg>'''
+            base64_data = base64.b64encode(info_svg.encode()).decode("ascii")
+            return f"data:image/svg+xml;base64,{base64_data}"
 
 def save_attachment(file, question_id):
     """Save an uploaded attachment file"""
