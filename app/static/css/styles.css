@@ -1,0 +1,55 @@
+/* General Styles */
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.container {
+    flex: 1;
+}
+
+.footer {
+    margin-top: auto;
+}
+
+
+/* Card Styles */
+
+.card {
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+
+/* Badge Styles */
+
+.badge {
+    margin-right: 5px;
+}
+
+
+/* LaTeX Preview */
+
+#latex-preview {
+    transition: all 0.3s ease;
+}
+
+
+/* Rating */
+
+input[type="number"] {
+    width: 100px;
+}
+
+
+/* Form validation */
+
+.invalid-feedback {
+    display: block;
+}

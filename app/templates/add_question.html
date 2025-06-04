@@ -1,0 +1,266 @@
+{% extends "base.html" %} {% block title %}Question Bank - Add Question{% endblock %} {% block head %}
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+    #latex-preview {
+        border: 1px solid #ccc;
+        padding: 15px;
+        margin-top: 10px;
+        min-height: 50px;
+        background-color: #f9f9f9;
+    }
+    
+    .tag-badge {
+        margin: 5px;
+        padding: 5px 10px;
+        display: inline-block;
+        cursor: pointer;
+        background-color: #6c757d;
+        color: white;
+        border-radius: 4px;
+    }
+    
+    .tag-badge:hover {
+        opacity: 0.8;
+    }
+    
+    .selected-tag {
+        background-color: #0d6efd;
+        color: white;
+    }
+    
+    .tag-selection-area {
+        border: 1px solid #ccc;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        min-height: 100px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    
+    .attachments-area {
+        border: 1px solid #ccc;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+    
+    .attachment-item {
+        margin-bottom: 10px;
+        padding: 8px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+    }
+    
+    .url-attachments-container {
+        margin-top: 15px;
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1>Add New Question</h1>
+        <p class="text-muted">Use LaTeX syntax for mathematical expressions. TikZ and CircuiTikZ diagrams are supported.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Question Form</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('add_question') }}" id="question-form" enctype="multipart/form-data">
+                    {{ form.hidden_tag() }}
+
+                    <div class="mb-3">
+                        <label for="content" class="form-label">{{ form.content.label }}</label> {{ form.content(class="form-control", id="latex-input", rows=5, placeholder="Enter LaTeX content...") }} {% if form.content.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.content.errors %} {{ error }} {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Preview</label>
+                        <div id="latex-preview">
+                            <div id="math-preview"></div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="rating" class="form-label">{{ form.rating.label }}</label> {{ form.rating(class="form-control", id="rating", min=1.0, max=10.0, step=0.1) }} {% if form.rating.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.rating.errors %} {{ error }} {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tags" class="form-label">New Tags (comma-separated)</label> {{ form.tags(class="form-control", id="tags", placeholder="math, algebra, calculus, etc.") }} {% if form.tags.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.tags.errors %} {{ error }} {% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">Enter new tags not in the list below</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Select Existing Tags</label>
+                        <div class="tag-selection-area">
+                            {% if all_tags %} {% for tag in all_tags %}
+                            <span class="badge tag-badge" data-tag="{{ tag }}" onclick="toggleTag(this)">{{ tag }}</span> {% endfor %} {% else %}
+                            <p class="text-muted">No existing tags yet. Create some with the field above.</p>
+                            {% endif %}
+                        </div>
+                        <div id="selected-tags-container">
+                            <!-- Hidden inputs for selected tags will be added here by JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Add Attachments</label>
+                        <div class="attachments-area">
+                            <div class="mb-3">
+                                <label for="attachment_file" class="form-label">Upload Files</label> {{ attachment_form.attachment_file(class="form-control", id="attachment_file", multiple=True) }}
+                                <div class="form-text">Select one or more files to upload (max 16MB total)</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Add URLs</label>
+                                <div id="url-attachments-container" class="url-attachments-container">
+                                    <div class="input-group mb-2">
+                                        <input type="url" name="attachment_url" class="form-control" placeholder="https://example.com/resource">
+                                        <button type="button" class="btn btn-outline-secondary" onclick="addUrlField()">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.submit(class="btn btn-primary") }}
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>LaTeX Help</h5>
+            </div>
+            <div class="card-body">
+                <h6>Basic Syntax</h6>
+                <ul>
+                    <li>Fractions: <code>\frac{numerator}{denominator}</code></li>
+                    <li>Square root: <code>\sqrt{expression}</code></li>
+                    <li>Exponents: <code>x^{exponent}</code></li>
+                    <li>Subscripts: <code>x_{subscript}</code></li>
+                    <li>Greek letters: <code>\alpha, \beta, \gamma, \pi</code></li>
+                </ul>
+
+                <h6>Examples</h6>
+                <ul>
+                    <li>Quadratic formula: <code>x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}</code></li>
+                    <li>Integration: <code>\int_{a}^{b} f(x) \, dx</code></li>
+                    <li>Summation: <code>\sum_{i=1}^{n} i^2</code></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5>TikZ & CircuiTikZ</h5>
+            </div>
+            <div class="card-body">
+                <h6>TikZ Example</h6>
+                <pre><code>\begin{tikzpicture}
+\draw (0,0) circle (1cm);
+\fill (0,0) circle (2pt);
+\draw[->] (0,0) -- (1,0);
+\end{tikzpicture}</code></pre>
+
+                <h6>CircuiTikZ Example</h6>
+                <pre><code>\begin{circuitikz}
+\draw (0,0) to[R=$R_1$] (2,0)
+      to[V=$V_1$] (2,2)
+      to[R=$R_2$] (0,2)
+      to[C=$C_1$] (0,0);
+\end{circuitikz}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const latexInput = document.getElementById('latex-input');
+        const mathPreview = document.getElementById('math-preview');
+
+        function updatePreview() {
+            const latex = latexInput.value;
+
+            // For TikZ, CircuiTikZ or scope environments, don't render in preview
+            if (latex.includes('\\begin{tikzpicture}') ||
+                latex.includes('\\begin{circuitikz}') ||
+                latex.includes('\\begin{scope}')) {
+                mathPreview.innerHTML = '<div class="alert alert-info">TikZ/CircuiTikZ diagram detected. Preview not available. Will be rendered when saved.</div>';
+                return;
+            }
+
+            mathPreview.innerHTML = '$$' + latex + '$$';
+            MathJax.typesetPromise([mathPreview]).catch(function(err) {
+                console.log('Error typesetting math:', err);
+            });
+        }
+
+        latexInput.addEventListener('input', updatePreview);
+
+        // Initial preview
+        updatePreview();
+    });
+
+    // Tag selection functionality
+    function toggleTag(element) {
+        element.classList.toggle('selected-tag');
+        updateSelectedTags();
+    }
+
+    function updateSelectedTags() {
+        const container = document.getElementById('selected-tags-container');
+        container.innerHTML = '';
+
+        const selectedTags = document.querySelectorAll('.tag-badge.selected-tag');
+        selectedTags.forEach(tag => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_tags';
+            input.value = tag.dataset.tag;
+            container.appendChild(input);
+        });
+    }
+
+    // URL attachment fields
+    function addUrlField() {
+        const container = document.getElementById('url-attachments-container');
+        const newField = document.createElement('div');
+        newField.className = 'input-group mb-2';
+        newField.innerHTML = `
+            <input type="url" name="attachment_url" class="form-control" placeholder="https://example.com/resource">
+            <button type="button" class="btn btn-outline-danger" onclick="removeUrlField(this)">-</button>
+        `;
+        container.appendChild(newField);
+    }
+
+    function removeUrlField(button) {
+        const fieldDiv = button.parentNode;
+        fieldDiv.parentNode.removeChild(fieldDiv);
+    }
+</script>
+{% endblock %}

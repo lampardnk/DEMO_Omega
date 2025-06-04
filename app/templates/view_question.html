@@ -1,0 +1,104 @@
+{% extends "base.html" %} {% block title %}Question Bank - View Question{% endblock %} {% block head %}
+<style>
+    .attachments-section {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+    }
+    
+    .attachment-item {
+        margin-bottom: 10px;
+        padding: 8px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        background-color: white;
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary mb-3">&larr; Back to Questions</a>
+        <h1>Question Details</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="badge bg-primary me-2">Rating: {{ question.rating }}</span> {% for tag in question.tags %}
+                    <a href="{{ url_for('index', tags=tag) }}" class="badge bg-secondary text-decoration-none">{{ tag }}</a> {% endfor %}
+                </div>
+                <div>
+                    <small class="text-muted me-3">ID: {{ question.id }}</small> {% if question.deleted %}
+                    <span class="badge bg-danger">Deleted</span> {% endif %} {% if question.edited_from %}
+                    <span class="badge bg-info">Edited Version</span> {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">Question Content:</h5>
+                <div class="p-3 bg-light rounded mb-4">
+                    <img src="{{ question.svg }}" alt="LaTeX formula" class="img-fluid">
+                </div>
+
+                <h6 class="mb-3">Raw LaTeX:</h6>
+                <pre class="bg-light p-3 mb-4"><code>{{ question.content }}</code></pre> {% if question.attachments %}
+                <div class="attachments-section">
+                    <h5 class="mb-3">Attachments:</h5>
+                    <div class="row">
+                        {% for attachment in question.attachments %}
+                        <div class="col-md-6 mb-3">
+                            <div class="attachment-item">
+                                {% if attachment.type == 'url' %}
+                                <div>
+                                    <i class="fas fa-link"></i>
+                                    <strong>URL:</strong>
+                                    <a href="{{ attachment.url }}" target="_blank">{{ attachment.url }}</a>
+                                </div>
+                                {% else %}
+                                <div>
+                                    <i class="fas fa-file"></i>
+                                    <strong>File:</strong> {{ attachment.original_filename }}
+                                </div>
+                                <div class="mt-2">
+                                    <a href="{{ url_for('download_attachment', question_id=question.id, attachment_id=attachment.id) }}" class="btn btn-sm btn-outline-primary">
+                                        Download
+                                    </a>
+                                </div>
+                                {% endif %} {% if not question.deleted %}
+                                <div class="mt-2">
+                                    <form method="post" action="{{ url_for('remove_attachment', question_id=question.id, attachment_id=attachment.id) }}" style="display: inline;">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to remove this attachment?');">
+                                            Remove
+                                        </button>
+                                    </form>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="d-flex justify-content-end mt-4">
+                    <a href="{{ url_for('edit_question', question_id=question.id) }}" class="btn btn-primary me-2">Edit Question</a>
+
+                    <form method="post" action="{{ url_for('delete_question', question_id=question.id) }}" onsubmit="return confirm('Are you sure you want to delete this question?');" style="display: inline;">
+                        <button type="submit" class="btn btn-danger">Delete Question</button>
+                    </form>
+                </div>
+
+                {% if question.edited_from %}
+                <div class="mt-4">
+                    <a href="{{ url_for('view_question', question_id=question.edited_from) }}" class="btn btn-sm btn-outline-secondary">View Previous Version</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %} {% block title %}Question Bank - Home{% endblock %} {% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Question Bank</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('add_question') }}" class="btn btn-primary">Add New Question</a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Filter & Sort</h5>
+            </div>
+            <div class="card-body">
+                <form method="get" action="{{ url_for('index') }}" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="tags" class="form-label">Filter by Tags:</label>
+                        <select name="tags" id="tags" class="form-select" multiple size="4">
+                            {% for tag in all_tags %}
+                                <option value="{{ tag }}" {% if tag in filter_tags %}selected{% endif %}>{{ tag }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Hold Ctrl/Cmd to select multiple tags</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="sort" class="form-label">Sort by:</label>
+                        <select name="sort" id="sort" class="form-select">
+                            <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest</option>
+                            <option value="rating_asc" {% if sort_by == 'rating_asc' %}selected{% endif %}>Rating (Low to High)</option>
+                            <option value="rating_desc" {% if sort_by == 'rating_desc' %}selected{% endif %}>Rating (High to Low)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Show Deleted:</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="show_deleted" name="show_deleted" value="true" {% if show_deleted %}checked{% endif %}>
+                            <label class="form-check-label" for="show_deleted">Include deleted questions</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">Apply</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        {% if filter_tags %}
+        <div class="d-flex align-items-center">
+            <span class="me-2">Active filters:</span> {% for tag in filter_tags %}
+            <span class="badge bg-secondary me-2">{{ tag }}</span> {% endfor %}
+            <a href="{{ url_for('index', sort=sort_by, show_deleted=show_deleted) }}" class="btn btn-sm btn-outline-secondary">Clear filters</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if questions %}
+<div class="row">
+    {% for question in questions %}
+    <div class="col-md-12 mb-4">
+        <div class="card {% if question.deleted %}border-danger{% endif %}">
+            <div class="card-header d-flex justify-content-between">
+                <div>
+                    <span class="badge bg-primary me-2">Rating: {{ question.rating }}</span> {% for tag in question.tags %}
+                    <a href="{{ url_for('index', tags=tag) }}" class="badge bg-secondary text-decoration-none">{{ tag }}</a> {% endfor %}
+                </div>
+                <div>
+                    {% if question.deleted %}
+                    <span class="badge bg-danger">Deleted</span> {% endif %} {% if question.edited_from %}
+                    <span class="badge bg-info">Edited Version</span> {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <img src="{{ question.svg }}" alt="LaTeX formula" class="img-fluid">
+                </div>
+                <a href="{{ url_for('view_question', question_id=question.id) }}" class="btn btn-sm btn-outline-primary">View Details</a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info">
+    No questions found. <a href="{{ url_for('add_question') }}">Add a question</a> to get started!
+</div>
+{% endif %} {% endblock %}
