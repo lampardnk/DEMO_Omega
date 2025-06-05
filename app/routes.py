@@ -145,14 +145,14 @@ def _generate_latex_svg(latex_string):
                 svg_result = subprocess.run(
                     ["pdf2svg", pdf_file, svg_file],
                     check=True,
-                    stdout=subprocess.PIPE,
+                stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
-                )
-                
+            )
+            
                 # Read the SVG file
                 with open(svg_file, "r") as f:
                     svg_content = f.read()
-                
+            
                 # Return base64 encoded SVG
                 base64_data = base64.b64encode(svg_content.encode()).decode("ascii")
                 return f"data:image/svg+xml;base64,{base64_data}"
@@ -292,14 +292,20 @@ def save_attachment(file, question_id):
 
 @app.route('/')
 def index():
+    # Redirect to question bank page instead of about page
+    return redirect(url_for('questionbank'))
+
+@app.route('/questionbank')
+def questionbank():
     # Check if we should show deleted questions
     show_deleted = request.args.get('show_deleted', 'false').lower() == 'true'
-    
-    questions = load_questions(include_deleted=show_deleted)
     
     # Get filter tags from request (can be multiple)
     filter_tags = request.args.getlist('tags')
     sort_by = request.args.get('sort', 'newest')
+    
+    # Load questions from the JSON file
+    questions = load_questions(include_deleted=show_deleted)
     
     # Filter by multiple tags if specified
     if filter_tags:
@@ -335,6 +341,14 @@ def index():
     
     return render_template('index.html', questions=questions, filter_tags=filter_tags, 
                           sort_by=sort_by, all_tags=all_tags, show_deleted=show_deleted)
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
+@app.route('/dashboard')
+def dashboard():
+    return render_template('dashboard.html')
 
 @app.route('/add_question', methods=['GET', 'POST'])
 def add_question():
@@ -405,7 +419,7 @@ def add_question():
         questions.append(new_question)
         save_questions(questions)
         flash('Question added successfully!', 'success')
-        return redirect(url_for('index'))
+        return redirect(url_for('questionbank'))
     
     return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
 
@@ -433,7 +447,7 @@ def edit_question(question_id):
     
     if not question:
         flash('Question not found!', 'error')
-        return redirect(url_for('index'))
+        return redirect(url_for('questionbank'))
     
     form = QuestionForm()
     attachment_form = AttachmentForm()
@@ -536,7 +550,7 @@ def delete_question(question_id):
         save_questions(questions)
         flash('Question deleted successfully!', 'success')
     
-    return redirect(url_for('index'))
+    return redirect(url_for('questionbank'))
 
 @app.route('/download/<question_id>/<attachment_id>')
 def download_attachment(question_id, attachment_id):

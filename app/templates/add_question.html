@@ -240,7 +240,7 @@
 
                     <div class="mb-3">
                         {{ form.submit(class="btn btn-primary") }}
-                        <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+                        <a href="{{ url_for('questionbank') }}" class="btn btn-secondary">Cancel</a>
                     </div>
                 </form>
             </div>
@@ -402,6 +402,60 @@ A light ray travels from air into a glass block as shown. Which of the following
 </div>
 {% endblock %} {% block scripts %}
 <script>
+    // Copy example code function - defined globally
+    function copyExample(button) {
+        const codeBlock = button.nextElementSibling;
+        const textToCopy = codeBlock.textContent;
+        
+        // Try to use the clipboard API first
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => {
+                    showCopiedMessage(button);
+                })
+                .catch(err => {
+                    console.error('Could not copy text with clipboard API: ', err);
+                    fallbackCopyText(textToCopy, button);
+                });
+        } else {
+            // Fallback for browsers without clipboard API
+            fallbackCopyText(textToCopy, button);
+        }
+    }
+    
+    // Fallback copy method using a temporary textarea element
+    function fallbackCopyText(text, button) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';  // Prevent scrolling to the element
+        textarea.style.opacity = '0';       // Make it invisible
+        document.body.appendChild(textarea);
+        textarea.select();
+        
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showCopiedMessage(button);
+            } else {
+                alert('Failed to copy text. Please try manually selecting and copying the text.');
+            }
+        } catch (err) {
+            console.error('Fallback copy method failed: ', err);
+            alert('Failed to copy text. Please try manually selecting and copying the text.');
+        } finally {
+            document.body.removeChild(textarea);
+        }
+    }
+    
+    // Show the "Copied!" message
+    function showCopiedMessage(button) {
+        const originalText = button.textContent;
+        button.textContent = "Copied!";
+        setTimeout(() => {
+            button.textContent = originalText;
+        }, 1500);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // Hide the page loader when DOM is loaded
         document.getElementById('page-loader').style.display = 'none';
@@ -422,7 +476,7 @@ A light ray travels from air into a glass block as shown. Which of the following
                 previewSpinner.style.display = 'none';
                 return;
             }
-            
+
             // Show spinner, hide other elements
             previewPlaceholder.style.display = 'none';
             mathPreview.style.display = 'none';
@@ -494,23 +548,6 @@ A light ray travels from air into a glass block as shown. Which of the following
         function removeUrlField(button) {
             const fieldDiv = button.parentNode;
             fieldDiv.parentNode.removeChild(fieldDiv);
-        }
-        
-        // Copy example code
-        function copyExample(button) {
-            const codeBlock = button.nextElementSibling;
-            const textToCopy = codeBlock.textContent;
-            
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                // Change button text temporarily
-                const originalText = button.textContent;
-                button.textContent = "Copied!";
-                setTimeout(() => {
-                    button.textContent = originalText;
-                }, 1500);
-            }).catch(err => {
-                console.error('Could not copy text: ', err);
-            });
         }
     });
 </script>
