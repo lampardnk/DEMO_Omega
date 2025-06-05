@@ -8,6 +8,7 @@
         margin-top: 10px;
         min-height: 50px;
         background-color: #f9f9f9;
+        text-align: center;
     }
     
     .tag-badge {
@@ -57,8 +58,102 @@
     .url-attachments-container {
         margin-top: 15px;
     }
+    
+    .example-code {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        position: relative;
+        margin-bottom: 15px;
+    }
+    
+    .copy-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        cursor: pointer;
+        padding: 3px 8px;
+        font-size: 12px;
+    }
+    
+    .copy-btn:hover {
+        background-color: #e9ecef;
+    }
+    
+    .preview-message {
+        padding: 20px;
+        color: #6c757d;
+    }
+    
+    .compile-error {
+        color: #dc3545;
+        text-align: left;
+        padding: 10px;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+    
+    .preview-spinner {
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border-left-color: #09f;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .page-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    
+    .loader-content {
+        text-align: center;
+        background-color: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .page-loader-spinner {
+        border: 6px solid rgba(0, 0, 0, 0.1);
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        border-left-color: #09f;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px;
+    }
 </style>
 {% endblock %} {% block content %}
+<!-- Page Loader -->
+<div id="page-loader" class="page-loader">
+    <div class="loader-content">
+        <div class="page-loader-spinner"></div>
+        <div>Loading question data...</div>
+    </div>
+</div>
+
 <div class="row mb-4">
     <div class="col-md-12">
         <a href="{{ url_for('view_question', question_id=question.id) }}" class="btn btn-outline-secondary mb-3">&larr; Back to Question</a>
@@ -87,8 +182,12 @@
 
                     <div class="mb-3">
                         <label class="form-label">Preview</label>
+                        <button type="button" id="compile-button" class="btn btn-primary btn-sm">Compile Preview</button>
                         <div id="latex-preview">
-                            <div id="math-preview"></div>
+                            <div id="preview-placeholder" class="preview-message">Press compile preview to preview SVG</div>
+                            <div id="preview-spinner" class="preview-spinner" style="display: none;"></div>
+                            <div id="math-preview" style="display: none;"></div>
+                            <div id="compile-error" class="compile-error" style="display: none;"></div>
                         </div>
                     </div>
 
@@ -178,46 +277,152 @@
     <div class="col-md-4">
         <div class="card mb-4">
             <div class="card-header">
-                <h5>LaTeX Help</h5>
+                <h5>LaTeX Examples</h5>
             </div>
             <div class="card-body">
-                <h6>Basic Syntax</h6>
-                <ul>
-                    <li>Fractions: <code>\frac{numerator}{denominator}</code></li>
-                    <li>Square root: <code>\sqrt{expression}</code></li>
-                    <li>Exponents: <code>x^{exponent}</code></li>
-                    <li>Subscripts: <code>x_{subscript}</code></li>
-                    <li>Greek letters: <code>\alpha, \beta, \gamma, \pi</code></li>
-                </ul>
+                <h6>Mathematical Formula</h6>
+                <div class="example-code">
+                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{amsmath}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{questions}
 
-                <h6>Examples</h6>
-                <ul>
-                    <li>Quadratic formula: <code>x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}</code></li>
-                    <li>Integration: <code>\int_{a}^{b} f(x) \, dx</code></li>
-                    <li>Summation: <code>\sum_{i=1}^{n} i^2</code></li>
-                </ul>
+\begin{document}
+
+\begin{questions}
+\question
+$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$
+\end{questions}
+
+\end{document}</pre>
+                </div>
+
+                <h6>Multiple Choice Question</h6>
+                <div class="example-code">
+                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{questions}
+
+\begin{document}
+
+\begin{questions}
+\question
+Which of the following is the solution to $x^2 + 6x + 9 = 0$?
+
+\begin{enumerate}[label=\Alph*.]
+    \item $x = 3$
+    \item $x = -3$
+    \item $x = \pm 3$
+    \item $x = -3$ (with multiplicity 2)
+\end{enumerate}
+
+\textbf{Answer:} D
+\end{questions}
+
+\end{document}</pre>
+                </div>
             </div>
         </div>
 
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header">
                 <h5>TikZ & CircuiTikZ</h5>
             </div>
             <div class="card-body">
                 <h6>TikZ Example</h6>
-                <pre><code>\begin{tikzpicture}
+                <div class="example-code">
+                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{tikz}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{tikzpicture}
+
+\begin{document}
+
+\begin{tikzpicture}
 \draw (0,0) circle (1cm);
 \fill (0,0) circle (2pt);
 \draw[->] (0,0) -- (1,0);
-\end{tikzpicture}</code></pre>
+\end{tikzpicture}
+
+\end{document}</pre>
+                </div>
 
                 <h6>CircuiTikZ Example</h6>
-                <pre><code>\begin{circuitikz}
+                <div class="example-code">
+                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{circuitikz}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{circuitikz}
+
+\begin{document}
+
+\begin{circuitikz}
 \draw (0,0) to[R=$R_1$] (2,0)
       to[V=$V_1$] (2,2)
       to[R=$R_2$] (0,2)
       to[C=$C_1$] (0,0);
-\end{circuitikz}</code></pre>
+\end{circuitikz}
+
+\end{document}</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5>Physics MCQ Example</h5>
+            </div>
+            <div class="card-body">
+                <div class="example-code">
+                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{questions}
+
+\begin{document}
+
+\begin{questions}
+\question
+A light ray travels from air into a glass block as shown. Which of the following best describes the behavior of the light as it enters the glass?
+
+\begin{center}
+\begin{tikzpicture}[scale=1.2]
+    \node at (2, 2.3) {Air};
+    \node at (2, 0.3) {Glass};
+    \draw[fill=blue!10] (0,0) rectangle (4,1.5);
+    \draw[dashed] (2,2.5) -- (2,-0.5);
+    \draw[->, thick] (0.5,2) -- (2,1);
+    \draw[->, thick] (2,1) -- (3.2,0.4);
+    \draw (2,1) +(50:0.5) arc[start angle=50,end angle=90,radius=0.5];
+    \node at (2.4,1.4) {\small $\theta_1$};
+    \draw (2,1) +(270:0.5) arc[start angle=270,end angle=305,radius=0.5];
+    \node at (2.3,0.5) {\small $\theta_2$};
+    \node at (1.2,2.1) {Incident ray};
+    \node at (3.5,0.3) {Refracted ray};
+\end{tikzpicture}
+\end{center}
+
+\begin{enumerate}[label=\Alph*.]
+    \item The light speeds up and bends away from the normal.  
+    \item The light slows down and bends toward the normal.  
+    \item The light slows down and bends away from the normal.  
+    \item The light continues in a straight line.
+\end{enumerate}
+
+\textbf{Answer:} B
+\end{questions}
+
+\end{document}</pre>
+                </div>
             </div>
         </div>
     </div>
@@ -225,30 +430,61 @@
 {% endblock %} {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Hide the page loader when DOM is loaded
+        document.getElementById('page-loader').style.display = 'none';
+        
         const latexInput = document.getElementById('latex-input');
         const mathPreview = document.getElementById('math-preview');
+        const previewPlaceholder = document.getElementById('preview-placeholder');
+        const compileButton = document.getElementById('compile-button');
+        const compileError = document.getElementById('compile-error');
+        const previewSpinner = document.getElementById('preview-spinner');
 
-        function updatePreview() {
+        compileButton.addEventListener('click', function() {
             const latex = latexInput.value;
-
-            // For TikZ, CircuiTikZ or scope environments, don't render in preview
-            if (latex.includes('\\begin{tikzpicture}') ||
-                latex.includes('\\begin{circuitikz}') ||
-                latex.includes('\\begin{scope}')) {
-                mathPreview.innerHTML = '<div class="alert alert-info">Complex LaTeX, please compile in Overleaf or TeXstudio before submitting.</div>';
+            if (!latex.trim()) {
+                previewPlaceholder.style.display = 'block';
+                mathPreview.style.display = 'none';
+                compileError.style.display = 'none';
+                previewSpinner.style.display = 'none';
                 return;
             }
-
-            mathPreview.innerHTML = '$$' + latex + '$$';
-            MathJax.typesetPromise([mathPreview]).catch(function(err) {
-                console.log('Error typesetting math:', err);
+            
+            // Show spinner, hide other elements
+            previewPlaceholder.style.display = 'none';
+            mathPreview.style.display = 'none';
+            compileError.style.display = 'none';
+            previewSpinner.style.display = 'block';
+            
+            // Send to server to compile - for ALL LaTeX content
+            fetch('/api/compile-latex', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({latex: latex})
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide spinner
+                previewSpinner.style.display = 'none';
+                
+                if (data.success) {
+                    mathPreview.innerHTML = '<img src="' + data.svg + '" class="img-fluid" alt="LaTeX Preview">';
+                    mathPreview.style.display = 'block';
+                } else {
+                    compileError.textContent = 'Compilation Error: ' + data.error;
+                    compileError.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                // Hide spinner
+                previewSpinner.style.display = 'none';
+                
+                compileError.textContent = 'Server Error: ' + error.message;
+                compileError.style.display = 'block';
             });
-        }
-
-        latexInput.addEventListener('input', updatePreview);
-
-        // Initial preview
-        updatePreview();
+        });
 
         // Initialize selected tags
         updateSelectedTags();
@@ -289,6 +525,23 @@
     function removeUrlField(button) {
         const fieldDiv = button.parentNode;
         fieldDiv.parentNode.removeChild(fieldDiv);
+    }
+    
+    // Copy example code
+    function copyExample(button) {
+        const codeBlock = button.nextElementSibling;
+        const textToCopy = codeBlock.textContent;
+        
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            // Change button text temporarily
+            const originalText = button.textContent;
+            button.textContent = "Copied!";
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 1500);
+        }).catch(err => {
+            console.error('Could not copy text: ', err);
+        });
     }
 </script>
 {% endblock %}
