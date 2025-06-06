@@ -170,6 +170,14 @@
                     {{ form.hidden_tag() }}
 
                     <div class="mb-3">
+                        <label for="name" class="form-label">{{ form.name.label }}</label> {{ form.name(class="form-control", id="name", placeholder="Enter a descriptive name for the question...") }} {% if form.name.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.name.errors %} {{ error }} {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
                         <label for="content" class="form-label">{{ form.content.label }}</label> {{ form.content(class="form-control", id="latex-input", rows=5, placeholder="Enter LaTeX content...") }} {% if form.content.errors %}
                         <div class="invalid-feedback d-block">
                             {% for error in form.content.errors %} {{ error }} {% endfor %}
@@ -196,21 +204,15 @@
                         {% endif %}
                     </div>
 
-                    <div class="mb-3">
-                        <label for="tags" class="form-label">New Tags (comma-separated)</label> {{ form.tags(class="form-control", id="tags", placeholder="math, algebra, calculus, etc.") }} {% if form.tags.errors %}
-                        <div class="invalid-feedback d-block">
-                            {% for error in form.tags.errors %} {{ error }} {% endfor %}
-                        </div>
-                        {% endif %}
-                        <div class="form-text">Enter new tags not in the list below</div>
-                    </div>
-
                     <div class="mb-4">
-                        <label class="form-label">Select Existing Tags</label>
+                        <label class="form-label">Select Tags</label>
                         <div class="tag-selection-area">
-                            {% if all_tags %} {% for tag in all_tags %}
-                            <span class="badge tag-badge" data-tag="{{ tag }}" onclick="toggleTag(this)">{{ tag }}</span> {% endfor %} {% else %}
-                            <p class="text-muted">No existing tags yet. Create some with the field above.</p>
+                            {% if all_tags %} 
+                                {% for tag in all_tags %}
+                                <span class="badge tag-badge" data-tag="{{ tag.id }}" onclick="toggleTag(this)">{{ tag.display_name }}</span> 
+                                {% endfor %} 
+                            {% else %}
+                                <p class="text-muted">No tags available. Please add tags in the Question Bank page first.</p>
                             {% endif %}
                         </div>
                         <div id="selected-tags-container">
@@ -222,8 +224,17 @@
                         <label class="form-label">Add Attachments</label>
                         <div class="attachments-area">
                             <div class="mb-3">
-                                <label for="attachment_file" class="form-label">Upload Files</label> {{ attachment_form.attachment_file(class="form-control", id="attachment_file", multiple=True) }}
-                                <div class="form-text">Select one or more files to upload (max 16MB total)</div>
+                                <label for="attachment_file" class="form-label">Upload Files</label>
+                                <input type="file" name="attachment_file" multiple class="form-control" id="attachment_file" accept=".pdf,.png,.jpg,.jpeg,.webm,.mp4,.docx,.xlsx,.pptx">
+                                <div class="form-text">
+                                    <p>Select up to 4 files to upload (max 100MB total):</p>
+                                    <ul class="small text-muted">
+                                        <li>At most 1 PDF file</li>
+                                        <li>At most 1 video file (webm or mp4)</li>
+                                        <li>At most 1 image file (png, jpg, or jpeg)</li>
+                                        <li>Any number of document files (docx, xlsx, pptx) up to the 4-file limit</li>
+                                    </ul>
+                                </div>
                             </div>
 
                             <div class="mb-3">
@@ -248,14 +259,19 @@
     </div>
 
     <div class="col-md-4">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>LaTeX Examples</h5>
-            </div>
-            <div class="card-body">
-                <h6>Mathematical Formula</h6>
-                <div class="example-code">
-                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+        <div class="accordion" id="examplesAccordion">
+            <!-- LaTeX Examples -->
+            <div class="accordion-item mb-2">
+                <h2 class="accordion-header" id="headingLatexExamples">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLatexExamples" aria-expanded="false" aria-controls="collapseLatexExamples">
+                        LaTeX Examples
+                    </button>
+                </h2>
+                <div id="collapseLatexExamples" class="accordion-collapse collapse" aria-labelledby="headingLatexExamples" data-bs-parent="#examplesAccordion">
+                    <div class="accordion-body">
+                        <h6>Mathematical Formula</h6>
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
 <pre>\documentclass{exam}
 \usepackage{amsmath}
 \usepackage[active,tightpage]{preview}
@@ -269,11 +285,11 @@ $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$
 \end{questions}
 
 \end{document}</pre>
-                </div>
+                        </div>
 
-                <h6>Multiple Choice Question</h6>
-                <div class="example-code">
-                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+                        <h6>Multiple Choice Question</h6>
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
 <pre>\documentclass{exam}
 \usepackage{amsmath}
 \usepackage{enumitem}
@@ -297,18 +313,23 @@ Which of the following is the solution to $x^2 + 6x + 9 = 0$?
 \end{questions}
 
 \end{document}</pre>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>TikZ & CircuiTikZ</h5>
-            </div>
-            <div class="card-body">
-                <h6>TikZ Example</h6>
-                <div class="example-code">
-                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+            
+            <!-- TikZ & CircuiTikZ -->
+            <div class="accordion-item mb-2">
+                <h2 class="accordion-header" id="headingTikZ">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTikZ" aria-expanded="false" aria-controls="collapseTikZ">
+                        TikZ & CircuiTikZ Examples
+                    </button>
+                </h2>
+                <div id="collapseTikZ" class="accordion-collapse collapse" aria-labelledby="headingTikZ" data-bs-parent="#examplesAccordion">
+                    <div class="accordion-body">
+                        <h6>TikZ Example</h6>
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
 <pre>\documentclass{exam}
 \usepackage{tikz}
 \usepackage[active,tightpage]{preview}
@@ -323,11 +344,11 @@ Which of the following is the solution to $x^2 + 6x + 9 = 0$?
 \end{tikzpicture}
 
 \end{document}</pre>
-                </div>
+                        </div>
 
-                <h6>CircuiTikZ Example</h6>
-                <div class="example-code">
-                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+                        <h6>CircuiTikZ Example</h6>
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
 <pre>\documentclass{exam}
 \usepackage{circuitikz}
 \usepackage[active,tightpage]{preview}
@@ -343,17 +364,22 @@ Which of the following is the solution to $x^2 + 6x + 9 = 0$?
 \end{circuitikz}
 
 \end{document}</pre>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h5>Physics MCQ Example</h5>
-            </div>
-            <div class="card-body">
-                <div class="example-code">
-                    <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+            
+            <!-- Physics Example -->
+            <div class="accordion-item mb-2">
+                <h2 class="accordion-header" id="headingPhysics">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePhysics" aria-expanded="false" aria-controls="collapsePhysics">
+                        Physics MCQ Example
+                    </button>
+                </h2>
+                <div id="collapsePhysics" class="accordion-collapse collapse" aria-labelledby="headingPhysics" data-bs-parent="#examplesAccordion">
+                    <div class="accordion-body">
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
 <pre>\documentclass{exam}
 \usepackage{tikz}
 \usepackage{amsmath}
@@ -395,6 +421,85 @@ A light ray travels from air into a glass block as shown. Which of the following
 \end{questions}
 
 \end{document}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Math Short Answer with Parts/Subparts -->
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingMathParts">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMathParts" aria-expanded="false" aria-controls="collapseMathParts">
+                        Math Short Answer with Parts/Subparts
+                    </button>
+                </h2>
+                <div id="collapseMathParts" class="accordion-collapse collapse" aria-labelledby="headingMathParts" data-bs-parent="#examplesAccordion">
+                    <div class="accordion-body">
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{questions}
+
+\begin{document}
+
+\begin{questions}
+\question[10] For the function $f(x) = 3x^2 - 4x + 2$, answer the following:
+\begin{parts}
+    \part[3] Find all critical points of the function.
+    \begin{solution}
+        To find critical points, we set $f'(x) = 0$:
+        \begin{align}
+            f'(x) &= 6x - 4\\
+            6x - 4 &= 0\\
+            6x &= 4\\
+            x &= \frac{2}{3}
+        \end{align}
+        
+        So there is one critical point at $x = \frac{2}{3}$.
+    \end{solution}
+    
+    \part[3] Determine whether each critical point is a local maximum, local minimum, or neither.
+    \begin{solution}
+        We can use the second derivative test:
+        \begin{align}
+            f''(x) = 6
+        \end{align}
+        
+        Since $f''(\frac{2}{3}) = 6 > 0$, the critical point is a local minimum.
+    \end{solution}
+    
+    \part[4] Calculate the following:
+    \begin{subparts}
+        \subpart[2] The value of the function at the critical point.
+        \begin{solution}
+            \begin{align}
+                f\left(\frac{2}{3}\right) &= 3\left(\frac{2}{3}\right)^2 - 4\left(\frac{2}{3}\right) + 2\\
+                &= 3 \cdot \frac{4}{9} - 4 \cdot \frac{2}{3} + 2\\
+                &= \frac{4}{3} - \frac{8}{3} + 2\\
+                &= \frac{4 - 8 + 6}{3}\\
+                &= \frac{2}{3}
+            \end{align}
+            
+            The value of the function at the critical point is $f\left(\frac{2}{3}\right) = \frac{2}{3}$.
+        \end{solution}
+        
+        \subpart[2] The range of the function.
+        \begin{solution}
+            Since $f(x) = 3x^2 - 4x + 2$ has a leading coefficient of 3 (positive), the parabola opens upward.
+            The minimum value is $f\left(\frac{2}{3}\right) = \frac{2}{3}$.
+            Therefore, the range of $f(x)$ is $\left[\frac{2}{3}, \infty\right)$.
+        \end{solution}
+    \end{subparts}
+\end{parts}
+\end{questions}
+
+\end{document}</pre>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -456,6 +561,43 @@ A light ray travels from air into a glass block as shown. Which of the following
         }, 1500);
     }
 
+    // Tag selection functionality - GLOBAL SCOPE
+    function toggleTag(element) {
+        element.classList.toggle('selected-tag');
+        updateSelectedTags();
+    }
+
+    function updateSelectedTags() {
+        const container = document.getElementById('selected-tags-container');
+        container.innerHTML = '';
+
+        const selectedTags = document.querySelectorAll('.tag-badge.selected-tag');
+        selectedTags.forEach(tag => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'selected_tags';
+            input.value = tag.dataset.tag;
+            container.appendChild(input);
+        });
+    }
+
+    // URL attachment fields - GLOBAL SCOPE
+    function addUrlField() {
+        const container = document.getElementById('url-attachments-container');
+        const newField = document.createElement('div');
+        newField.className = 'input-group mb-2';
+        newField.innerHTML = `
+            <input type="url" name="attachment_url" class="form-control" placeholder="https://example.com/resource">
+            <button type="button" class="btn btn-outline-danger" onclick="removeUrlField(this)">-</button>
+        `;
+        container.appendChild(newField);
+    }
+
+    function removeUrlField(button) {
+        const fieldDiv = button.parentNode;
+        fieldDiv.parentNode.removeChild(fieldDiv);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // Hide the page loader when DOM is loaded
         document.getElementById('page-loader').style.display = 'none';
@@ -512,43 +654,6 @@ A light ray travels from air into a glass block as shown. Which of the following
                 compileError.style.display = 'block';
             });
         });
-
-        // Tag selection functionality
-        function toggleTag(element) {
-            element.classList.toggle('selected-tag');
-            updateSelectedTags();
-        }
-
-        function updateSelectedTags() {
-            const container = document.getElementById('selected-tags-container');
-            container.innerHTML = '';
-
-            const selectedTags = document.querySelectorAll('.tag-badge.selected-tag');
-            selectedTags.forEach(tag => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'selected_tags';
-                input.value = tag.dataset.tag;
-                container.appendChild(input);
-            });
-        }
-
-        // URL attachment fields
-        function addUrlField() {
-            const container = document.getElementById('url-attachments-container');
-            const newField = document.createElement('div');
-            newField.className = 'input-group mb-2';
-            newField.innerHTML = `
-                <input type="url" name="attachment_url" class="form-control" placeholder="https://example.com/resource">
-                <button type="button" class="btn btn-outline-danger" onclick="removeUrlField(this)">-</button>
-            `;
-            container.appendChild(newField);
-        }
-
-        function removeUrlField(button) {
-            const fieldDiv = button.parentNode;
-            fieldDiv.parentNode.removeChild(fieldDiv);
-        }
     });
 </script>
 {% endblock %}

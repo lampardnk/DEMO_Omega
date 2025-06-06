@@ -13,6 +13,7 @@ import uuid
 from decimal import Decimal
 import base64
 import time
+import mimetypes
 
 # Custom JSON encoder to handle Decimal objects
 class DecimalEncoder(json.JSONEncoder):
@@ -39,13 +40,35 @@ def save_questions(questions):
     with open(app.config['QUESTIONS_FILE'], 'w') as f:
         json.dump(questions, f, indent=4, cls=DecimalEncoder)
 
+def load_tags():
+    """Load tags from the tags file"""
+    if os.path.exists(app.config['TAGS_FILE']):
+        with open(app.config['TAGS_FILE'], 'r') as f:
+            return json.load(f)
+    return []
+
+def save_tags(tags):
+    """Save tags to the tags file"""
+    os.makedirs(os.path.dirname(app.config['TAGS_FILE']), exist_ok=True)
+    with open(app.config['TAGS_FILE'], 'w') as f:
+        json.dump(tags, f, indent=4)
+
 def get_all_tags():
-    """Get all unique tags from the questions"""
-    all_tags = set()
-    for question in load_questions():
-        for tag in question.get('tags', []):
-            all_tags.add(tag)
-    return sorted(all_tags)
+    """Get all tags with their IDs and display names"""
+    return load_tags()
+
+def get_tag_by_id(tag_id):
+    """Get a tag by its ID"""
+    tags = load_tags()
+    for tag in tags:
+        if tag['id'] == tag_id:
+            return tag
+    return None
+
+def get_tag_display_name(tag_id):
+    """Get the display name for a tag ID"""
+    tag = get_tag_by_id(tag_id)
+    return tag['display_name'] if tag else tag_id
 
 def get_latex_cache_key(latex_string):
     """Generate a cache key for LaTeX content"""
@@ -279,13 +302,33 @@ def save_attachment(file, question_id):
     file_path = os.path.join(attachment_dir, filename)
     file.save(file_path)
     
+    # Get file extension
+    extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    
+    # Determine file type category
+    file_category = 'other'
+    if extension in app.config['VIEWABLE_EXTENSIONS']:
+        if extension == 'pdf':
+            file_category = 'pdf'
+        elif extension in ['webm', 'mp4']:
+            file_category = 'video'
+        elif extension in ['png', 'jpg', 'jpeg']:
+            file_category = 'image'
+    elif extension in app.config['DOWNLOADABLE_EXTENSIONS']:
+        file_category = 'document'
+    
+    # Get mime type
+    mime_type = file.content_type or mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    
     # Create attachment info
     attachment = {
         'id': str(uuid.uuid4()),
         'filename': filename,
         'original_filename': file.filename,
         'path': os.path.join(question_id, filename),
-        'type': file.content_type
+        'type': mime_type,
+        'file_type': extension,
+        'category': file_category
     }
     
     return attachment
@@ -304,6 +347,9 @@ def questionbank():
     filter_tags = request.args.getlist('tags')
     sort_by = request.args.get('sort', 'newest')
     
+    # Get search query if any
+    search_query = request.args.get('search', '').strip().lower()
+    
     # Load questions from the JSON file
     questions = load_questions(include_deleted=show_deleted)
     
@@ -315,6 +361,18 @@ def questionbank():
             if any(tag in question.get('tags', []) for tag in filter_tags):
                 filtered_questions.append(question)
         questions = filtered_questions
+    
+    # Filter by search query if specified
+    if search_query:
+        search_results = []
+        for question in questions:
+            # Check if search query is in name or content
+            name = question.get('name', '').lower()
+            content = question.get('content', '').lower()
+            
+            if search_query in name or search_query in content:
+                search_results.append(question)
+        questions = search_results
     
     # Sort questions
     if sort_by == 'rating_asc':
@@ -336,11 +394,12 @@ def questionbank():
     if updated:
         save_questions(load_questions(include_deleted=True))
     
-    # Get all unique tags for the filter dropdown
+    # Get all tags for the filter dropdown
     all_tags = get_all_tags()
     
     return render_template('index.html', questions=questions, filter_tags=filter_tags, 
-                          sort_by=sort_by, all_tags=all_tags, show_deleted=show_deleted)
+                          sort_by=sort_by, all_tags=all_tags, show_deleted=show_deleted,
+                          search_query=search_query)
 
 @app.route('/about')
 def about():
@@ -361,16 +420,12 @@ def add_question():
     if form.validate_on_submit():
         questions = load_questions(include_deleted=True)
         
-        # Parse tags from comma-separated string to list and add selected tags
-        input_tags = [tag.strip() for tag in form.tags.data.split(',') if tag.strip()]
-        selected_tags = request.form.getlist('selected_tags')
-        
-        # Combine both sets of tags and remove duplicates
-        combined_tags = list(set(input_tags + selected_tags))
+        # Get selected tag IDs from the form
+        selected_tag_ids = request.form.getlist('selected_tags')
         
         # Ensure at least one tag is provided
-        if not combined_tags:
-            flash('Please provide at least one tag for the question.', 'error')
+        if not selected_tag_ids:
+            flash('Please select at least one tag for the question.', 'error')
             return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
         
         # Generate unique ID for the question
@@ -394,11 +449,12 @@ def add_question():
         # Create the new question
         new_question = {
             'id': question_id,
+            'name': form.name.data,
             'content': form.content.data,
             'svg': latex_svg,
             'svg_generated': False,  # Flag to indicate SVG needs to be generated
             'rating': float(form.rating.data),  # Convert Decimal to float
-            'tags': combined_tags,
+            'tags': selected_tag_ids,
             'deleted': False,
             'attachments': url_attachments
         }
@@ -406,12 +462,27 @@ def add_question():
         # Process file uploads if any
         if 'attachment_file' in request.files:
             files = request.files.getlist('attachment_file')
-            file_attachments = []
+            # Debug info
+            file_names = [f.filename for f in files if f and f.filename]
+            flash(f"Files detected: {len(file_names)} - {', '.join(file_names)}", 'info')
             
-            for file in files:
-                if file and file.filename:
+            valid_files = [f for f in files if f and f.filename]
+            
+            # Validate files against limits
+            is_valid, error_message = validate_file_uploads(valid_files)
+            if not is_valid:
+                flash(error_message, 'error')
+                return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
+            
+            file_attachments = []
+            for file in valid_files:
+                if allowed_file(file.filename):
                     attachment = save_attachment(file, question_id)
                     file_attachments.append(attachment)
+                else:
+                    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'unknown'
+                    flash(f'File type {ext} is not allowed', 'error')
+                    return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
             
             # Add file attachments to question
             new_question['attachments'].extend(file_attachments)
@@ -455,24 +526,22 @@ def edit_question(question_id):
     
     if request.method == 'GET':
         # Pre-populate the form with existing question data
+        if 'name' in question:
+            form.name.data = question['name']
         form.content.data = question['content']
         form.rating.data = question['rating']
-        form.tags.data = ', '.join(question['tags'])
+        # Tags are now selected from dropdown, not text input
     
     if form.validate_on_submit():
         # Mark the old question as deleted
         question['deleted'] = True
         
-        # Parse tags from comma-separated string to list and add selected tags
-        input_tags = [tag.strip() for tag in form.tags.data.split(',') if tag.strip()]
-        selected_tags = request.form.getlist('selected_tags')
-        
-        # Combine both sets of tags and remove duplicates
-        combined_tags = list(set(input_tags + selected_tags))
+        # Get selected tag IDs from the form
+        selected_tag_ids = request.form.getlist('selected_tags')
         
         # Ensure at least one tag is provided
-        if not combined_tags:
-            flash('Please provide at least one tag for the question.', 'error')
+        if not selected_tag_ids:
+            flash('Please select at least one tag for the question.', 'error')
             return render_template('edit_question.html', form=form, attachment_form=attachment_form, question=question, all_tags=all_tags)
         
         # Generate unique ID for the new question
@@ -512,11 +581,12 @@ def edit_question(question_id):
         # Create a new question with the edited data
         new_question = {
             'id': new_question_id,
+            'name': form.name.data,
             'content': form.content.data,
             'svg': latex_svg,  # Use existing SVG initially
             'svg_generated': False,  # Flag to indicate SVG needs to be generated
             'rating': float(form.rating.data),
-            'tags': combined_tags,
+            'tags': selected_tag_ids,
             'deleted': False,
             'edited_from': question_id,  # Reference to the original question
             'attachments': kept_attachments
@@ -525,10 +595,39 @@ def edit_question(question_id):
         # Process new file uploads if any
         if 'attachment_file' in request.files:
             files = request.files.getlist('attachment_file')
-            for file in files:
-                if file and file.filename:
+            valid_files = [f for f in files if f and f.filename]
+            
+            # Validate files against limits
+            # First, count existing files that are being kept
+            existing_pdfs = sum(1 for a in kept_attachments if a.get('category', '') == 'pdf')
+            existing_videos = sum(1 for a in kept_attachments if a.get('category', '') == 'video')
+            existing_images = sum(1 for a in kept_attachments if a.get('category', '') == 'image')
+            
+            # Create a combined list for validation
+            all_files = valid_files + [
+                type('obj', (object,), {
+                    'filename': a.get('original_filename', ''),
+                })
+                for a in kept_attachments
+            ]
+            
+            # Validate all files together
+            is_valid, error_message = validate_file_uploads(all_files)
+            if not is_valid:
+                flash(error_message, 'error')
+                return render_template('edit_question.html', form=form, attachment_form=attachment_form, 
+                                      question=question, all_tags=all_tags)
+            
+            # Process new uploads
+            for file in valid_files:
+                if allowed_file(file.filename):
                     attachment = save_attachment(file, new_question_id)
                     new_question['attachments'].append(attachment)
+                else:
+                    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'unknown'
+                    flash(f'File type {ext} is not allowed', 'error')
+                    return render_template('edit_question.html', form=form, attachment_form=attachment_form, 
+                                          question=question, all_tags=all_tags)
         
         questions.append(new_question)
         save_questions(questions)
@@ -605,3 +704,156 @@ def remove_attachment(question_id, attachment_id):
         flash('Attachment not found!', 'error')
     
     return redirect(url_for('view_question', question_id=question_id)) 
+
+@app.route('/api/tags', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def manage_tags():
+    """API endpoint to manage tags"""
+    tags = load_tags()
+    
+    if request.method == 'GET':
+        # Return all tags
+        return jsonify(tags)
+        
+    elif request.method == 'POST':
+        # Add a new tag
+        data = request.get_json()
+        if not data or 'display_name' not in data:
+            return jsonify({'success': False, 'error': 'No display name provided'}), 400
+            
+        # Create a safe ID from the display name
+        tag_id = data.get('id', data['display_name'].lower().replace(' ', '_'))
+        
+        # Check if the tag already exists
+        if any(tag['id'] == tag_id for tag in tags):
+            return jsonify({'success': False, 'error': 'Tag ID already exists'}), 400
+            
+        # Add the new tag
+        new_tag = {
+            'id': tag_id,
+            'display_name': data['display_name']
+        }
+        tags.append(new_tag)
+        save_tags(tags)
+        
+        return jsonify({'success': True, 'tag': new_tag})
+        
+    elif request.method == 'PUT':
+        # Update a tag's display name
+        data = request.get_json()
+        if not data or 'id' not in data or 'display_name' not in data:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+            
+        # Find the tag to update
+        tag_to_update = next((tag for tag in tags if tag['id'] == data['id']), None)
+        if not tag_to_update:
+            return jsonify({'success': False, 'error': 'Tag not found'}), 404
+            
+        # Update the display name
+        tag_to_update['display_name'] = data['display_name']
+        save_tags(tags)
+        
+        return jsonify({'success': True, 'tag': tag_to_update})
+        
+    elif request.method == 'DELETE':
+        # Delete a tag
+        data = request.get_json()
+        if not data or 'id' not in data:
+            return jsonify({'success': False, 'error': 'No tag ID provided'}), 400
+            
+        # Check if the tag exists
+        tag_to_delete = next((tag for tag in tags if tag['id'] == data['id']), None)
+        if not tag_to_delete:
+            return jsonify({'success': False, 'error': 'Tag not found'}), 404
+            
+        # Remove the tag
+        tags.remove(tag_to_delete)
+        save_tags(tags)
+        
+        # Also need to remove this tag from all questions
+        questions = load_questions(include_deleted=True)
+        updated = False
+        for question in questions:
+            if data['id'] in question.get('tags', []):
+                question['tags'].remove(data['id'])
+                updated = True
+        
+        if updated:
+            save_questions(questions)
+            
+        return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': 'Invalid request method'}), 405
+
+# Make tag helper functions available in templates
+@app.context_processor
+def inject_tag_helpers():
+    return {
+        'get_tag_by_id': get_tag_by_id,
+        'get_tag_display_name': get_tag_display_name
+    } 
+
+def allowed_file(filename):
+    """Check if the file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+def validate_file_uploads(files):
+    """
+    Validate file uploads against the defined limits:
+    - at most 1 pdf
+    - at most 1 webm OR mp4 
+    - at most 1 png, jpg, or jpeg
+    - at most 4 files in total
+    
+    Returns a tuple of (is_valid, error_message)
+    """
+    if len(files) > 4:
+        return False, "Maximum 4 files can be uploaded"
+    
+    # Count file types
+    pdf_count = 0
+    video_count = 0
+    image_count = 0
+    
+    # Total file size
+    total_size = 0
+    
+    for file in files:
+        if not file or not file.filename:
+            continue
+        
+        # Get file extension
+        extension = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if not extension or extension not in app.config['ALLOWED_EXTENSIONS']:
+            return False, f"File type {extension} is not allowed"
+        
+        # Check file size (in bytes)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)  # Reset file pointer
+        
+        total_size += file_size
+        
+        # Count by file type
+        if extension == 'pdf':
+            pdf_count += 1
+        elif extension in ['webm', 'mp4']:
+            video_count += 1
+        elif extension in ['png', 'jpg', 'jpeg']:
+            image_count += 1
+    
+    # Validate counts
+    if pdf_count > 1:
+        return False, "Only 1 PDF file is allowed"
+    
+    if video_count > 1:
+        return False, "Only 1 video file (webm or mp4) is allowed"
+    
+    if image_count > 1:
+        return False, "Only 1 image file (png, jpg, or jpeg) is allowed"
+    
+    # Max total size (100MB)
+    if total_size > app.config['MAX_CONTENT_LENGTH']:
+        return False, f"Total file size must be less than {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)}MB"
+    
+    return True, "" 

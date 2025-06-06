@@ -29,8 +29,15 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
-                    <span class="badge bg-primary me-2">Rating: {{ question.rating }}</span> {% for tag in question.tags %}
-                    <a href="{{ url_for('index', tags=tag) }}" class="badge bg-secondary text-decoration-none">{{ tag }}</a> {% endfor %}
+                    <span class="badge bg-primary me-2">Rating: {{ question.rating }}</span> 
+                    {% for tag_id in question.tags %}
+                        {% set tag = get_tag_by_id(tag_id) %}
+                        {% if tag %}
+                            <a href="{{ url_for('questionbank', tags=tag_id) }}" class="badge bg-secondary text-decoration-none">{{ tag.display_name }}</a> 
+                        {% else %}
+                            <span class="badge bg-secondary">{{ tag_id }}</span>
+                        {% endif %}
+                    {% endfor %}
                 </div>
                 <div>
                     <small class="text-muted me-3">ID: {{ question.id }}</small> {% if question.deleted %}
@@ -39,6 +46,9 @@
                 </div>
             </div>
             <div class="card-body">
+                {% if question.name %}
+                <h4 class="card-title mb-4">{{ question.name }}</h4>
+                {% endif %}
                 <h5 class="card-title">Question Content:</h5>
                 <div class="p-3 bg-light rounded mb-4 text-center">
                     <img src="{{ question.svg }}" alt="LaTeX formula" class="img-fluid w-100">
