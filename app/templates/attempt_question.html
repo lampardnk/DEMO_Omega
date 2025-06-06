@@ -1,0 +1,366 @@
+{% extends "base.html" %} 
+{% block title %}Question Bank - Attempt Question{% endblock %} 
+
+{% block head %}
+<style>
+    .question-content {
+        margin-bottom: 30px;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+    }
+    
+    .answer-section {
+        margin-bottom: 30px;
+    }
+    
+    .media-section {
+        margin-top: 20px;
+    }
+    
+    .media-nav {
+        margin-bottom: 15px;
+    }
+    
+    .media-container {
+        min-height: 300px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+        background-color: #f9f9f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .pdf-viewer {
+        width: 100%;
+        height: 500px;
+    }
+    
+    .image-viewer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .image-container {
+        overflow: hidden;
+        max-width: 100%;
+        max-height: 500px;
+        margin-bottom: 10px;
+    }
+    
+    .image-container img {
+        max-width: 100%;
+        transition: transform 0.3s ease;
+    }
+    
+    .zoom-controls {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    
+    .video-container {
+        width: 100%;
+    }
+    
+    .video-container video {
+        width: 100%;
+        max-height: 500px;
+    }
+    
+    .attachments-list {
+        list-style: none;
+        padding: 0;
+    }
+    
+    .attachment-item {
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: white;
+    }
+    
+    .word-count {
+        color: #6c757d;
+        text-align: right;
+        font-size: 0.9rem;
+        margin-top: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary mb-3">&larr; Back to Questions</a>
+        <h1>Attempt Question</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <!-- Question Display -->
+        <div class="question-content">
+            {% if question.name %}
+            <h4 class="mb-3">{{ question.name }}</h4>
+            {% endif %}
+            
+            <div class="d-flex justify-content-between mb-3">
+                <div>
+                    <span class="badge bg-primary me-2">Rating: {{ question.rating }}</span> 
+                    {% for tag_id in question.tags %}
+                        {% set tag = get_tag_by_id(tag_id) %}
+                        {% if tag %}
+                            <span class="badge bg-secondary">{{ tag.display_name }}</span> 
+                        {% else %}
+                            <span class="badge bg-secondary">{{ tag_id }}</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <img src="{{ question.svg }}" alt="LaTeX formula" class="img-fluid w-100">
+            </div>
+        </div>
+        
+        <!-- Answer Section -->
+        <div class="answer-section">
+            <h4>Your Answer</h4>
+            <div class="mb-3">
+                <textarea id="answer" class="form-control" rows="5" placeholder="Type your answer here..." maxlength="2000" oninput="countWords(this)"></textarea>
+                <div class="word-count">
+                    <span id="word-counter">0</span> / 100 words
+                </div>
+            </div>
+            <button id="submit-answer" class="btn btn-primary">Submit Answer</button>
+        </div>
+        
+        <!-- Media Section -->
+        <div class="media-section">
+            <div class="media-nav">
+                <div class="btn-group" role="group" aria-label="Media Navigation">
+                    <!-- Check attachments -->
+                    {% set has_attachments = question.attachments and question.attachments|length > 0 %}
+                    {% set media = namespace(pdf=none, video=none, image=none) %}
+                    {% for attachment in question.attachments %}
+                        {% if not media.pdf and (attachment.get('category', '') == 'pdf' or attachment.get('file_type', '') == 'pdf') %}
+                            {% set media.pdf = attachment %}
+                        {% elif not media.video and (attachment.get('category', '') == 'video' or (attachment.get('file_type', '') and attachment.get('file_type') in ['webm', 'mp4'])) %}
+                            {% set media.video = attachment %}
+                        {% elif not media.image and (attachment.get('category', '') == 'image' or (attachment.get('file_type', '') and attachment.get('file_type') in ['png', 'jpg', 'jpeg'])) %}
+                            {% set media.image = attachment %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <button id="btn-attachments" class="btn btn-outline-secondary{% if not has_attachments %} disabled{% endif %}" onclick="showMedia('attachments')">Attachments</button>
+                    
+                    <button id="btn-pdf" class="btn btn-outline-secondary{% if not media.pdf %}disabled{% endif %}" onclick="showMedia('pdf')">PDF</button>
+                    
+                    <button id="btn-video" class="btn btn-outline-secondary{% if not media.video %}disabled{% endif %}" onclick="showMedia('video')">Video</button>
+                    
+                    <button id="btn-image" class="btn btn-outline-secondary{% if not media.image %}disabled{% endif %}" onclick="showMedia('image')">Image</button>
+                </div>
+            </div>
+            
+            <div class="media-container">
+                <!-- Attachments View -->
+                <div id="media-attachments" class="w-100" style="display: none;">
+                    {% if has_attachments %}
+                    <h5>Available Downloads</h5>
+                    <ul class="attachments-list">
+                        {% for attachment in question.attachments %}
+                        <li class="attachment-item">
+                            {% if attachment.get('type') == 'url' %}
+                                <i class="fas fa-link"></i>
+                                <strong>{{ attachment.get('description', 'URL Link') }}</strong>
+                                <div class="mt-2">
+                                    <a href="{{ attachment.url }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                        Open URL
+                                    </a>
+                                </div>
+                            {% else %}
+                                <i class="fas fa-file"></i>
+                                <strong>{{ attachment.original_filename }}</strong>
+                                <div class="mt-2">
+                                    <a href="{{ url_for('download_attachment', question_id=question.id, attachment_id=attachment.id) }}" class="btn btn-sm btn-outline-primary">
+                                        Download
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>No attachments available for this question.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- PDF Viewer -->
+                <div id="media-pdf" class="w-100" style="display: none;">
+                    {% if media.pdf %}
+                    <object class="pdf-viewer" data="{{ url_for('download_attachment', question_id=question.id, attachment_id=media.pdf.id) }}" type="application/pdf">
+                        <p>It appears your browser doesn't support embedded PDFs. You can <a href="{{ url_for('download_attachment', question_id=question.id, attachment_id=media.pdf.id) }}">download the PDF</a> instead.</p>
+                    </object>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>No PDF attachment available for this question.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Video Player -->
+                <div id="media-video" class="w-100" style="display: none;">
+                    {% if media.video %}
+                    <div class="video-container">
+                        <video controls>
+                            <source src="{{ url_for('download_attachment', question_id=question.id, attachment_id=media.video.id) }}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>No video attachment available for this question.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Image Viewer -->
+                <div id="media-image" class="w-100" style="display: none;">
+                    {% if media.image %}
+                    <div class="image-viewer">
+                        <div class="image-container">
+                            <img id="zoomable-image" src="{{ url_for('download_attachment', question_id=question.id, attachment_id=media.image.id) }}" alt="Question image" style="transform: scale(1);">
+                        </div>
+                        <div class="zoom-controls">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="zoomImage(-0.1)">Zoom Out</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="zoomImage(0.1)">Zoom In</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="resetZoom()">Reset</button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>No image attachment available for this question.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Default Message -->
+                <div id="media-default" class="text-center text-muted">
+                    <p>Select a media type to view attachments.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Word counter function
+    function countWords(textarea) {
+        const text = textarea.value;
+        const words = text.trim().split(/\s+/);
+        const wordCount = text.trim() === '' ? 0 : words.length;
+        
+        document.getElementById('word-counter').textContent = wordCount;
+        
+        // Visual feedback if over the limit
+        if (wordCount > 100) {
+            document.getElementById('word-counter').style.color = '#dc3545';
+        } else {
+            document.getElementById('word-counter').style.color = '#6c757d';
+        }
+    }
+    
+    // Media viewer controls
+    function showMedia(type) {
+        // Hide all media containers
+        document.getElementById('media-attachments').style.display = 'none';
+        document.getElementById('media-pdf').style.display = 'none';
+        document.getElementById('media-video').style.display = 'none';
+        document.getElementById('media-image').style.display = 'none';
+        document.getElementById('media-default').style.display = 'none';
+        
+        // Remove active class from all buttons
+        document.getElementById('btn-attachments').classList.remove('active');
+        document.getElementById('btn-pdf').classList.remove('active');
+        document.getElementById('btn-video').classList.remove('active');
+        document.getElementById('btn-image').classList.remove('active');
+        
+        // Show selected media
+        if (type === 'attachments' && !document.getElementById('btn-attachments').classList.contains('disabled')) {
+            document.getElementById('media-attachments').style.display = 'block';
+            document.getElementById('btn-attachments').classList.add('active');
+        } else if (type === 'pdf' && !document.getElementById('btn-pdf').classList.contains('disabled')) {
+            document.getElementById('media-pdf').style.display = 'block';
+            document.getElementById('btn-pdf').classList.add('active');
+        } else if (type === 'video' && !document.getElementById('btn-video').classList.contains('disabled')) {
+            document.getElementById('media-video').style.display = 'block';
+            document.getElementById('btn-video').classList.add('active');
+        } else if (type === 'image' && !document.getElementById('btn-image').classList.contains('disabled')) {
+            document.getElementById('media-image').style.display = 'block';
+            document.getElementById('btn-image').classList.add('active');
+        } else {
+            document.getElementById('media-default').style.display = 'block';
+        }
+    }
+    
+    // Image zoom functionality
+    let currentZoom = 1;
+    
+    function zoomImage(factor) {
+        currentZoom += factor;
+        // Limit zoom range
+        if (currentZoom < 0.5) currentZoom = 0.5;
+        if (currentZoom > 3) currentZoom = 3;
+        
+        document.getElementById('zoomable-image').style.transform = `scale(${currentZoom})`;
+    }
+    
+    function resetZoom() {
+        currentZoom = 1;
+        document.getElementById('zoomable-image').style.transform = 'scale(1)';
+    }
+    
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Setup submit button action
+        document.getElementById('submit-answer').addEventListener('click', function() {
+            alert('Answer submitted! (This is a placeholder - no actual submission is performed yet)');
+        });
+        
+        // Check which media types are available
+        const hasAttachments = !document.getElementById('btn-attachments').classList.contains('disabled');
+        const hasPdf = !document.getElementById('btn-pdf').classList.contains('disabled');
+        const hasVideo = !document.getElementById('btn-video').classList.contains('disabled');
+        const hasImage = !document.getElementById('btn-image').classList.contains('disabled');
+        
+        // Hide the default message if we have media to show
+        if (hasAttachments || hasPdf || hasVideo || hasImage) {
+            document.getElementById('media-default').style.display = 'none';
+        } else {
+            document.getElementById('media-default').style.display = 'block';
+            return;
+        }
+        
+        // Initialize with the appropriate media type
+        if (hasAttachments) {
+            showMedia('attachments');
+        } else if (hasPdf) {
+            showMedia('pdf');
+        } else if (hasVideo) {
+            showMedia('video');
+        } else if (hasImage) {
+            showMedia('image');
+        }
+    });
+</script>
+{% endblock %} 

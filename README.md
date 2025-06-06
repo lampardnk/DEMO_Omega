@@ -103,6 +103,11 @@ DEMO_Omega/
   - Tag filtering and search functionality
   - Collapsible example templates for question creation
 
+- **Media Viewers**
+  - In-app PDF viewer
+  - Integrated video player
+  - Image gallery with zoom/pan
+
 ## TODO Features
 
 - **Question Attempt System**
@@ -114,20 +119,39 @@ DEMO_Omega/
   - Multi-level hints for progressive help
   - Hint usage tracking
 
+- **Submission Management**
+  - View submission history
+  - Detailed submission analytics
+  - Performance reporting
+
+- **Quiz engine**
+  - Generate quizzes by pulling from question bank
+  - Spaced Repetition mode
+  - Focus mode
+  - Spread mode 
+  - Road to Olymmpia (Ramping difficulty)
+  - Custom Quizpacks
+
+- **Spaced Repetition**
+  - Box -1: Tags that will never get recommended by quiz engine
+  - Box 0: Tags that will always be recommended
+  - Box 1 to 5: Based on levels of mastery
+
 - **AI Marking Engine**
   - Automated assessment of student responses
   - Feedback generation for answers
   - Partial credit scoring
 
-- **Media Viewers**
-  - In-app PDF viewer
-  - Integrated video player
-  - Image gallery with zoom/pan
-
-- **Submission Management**
-  - View submission history
-  - Detailed submission analytics
-  - Performance reporting
+- **Dashboard**
+  - User basic info (Avatar, name, age, classes, goals, short description)
+  - Personal and Parents email
+  - Time range for data: Past X/3/7/14/21/30 days
+  - Gradebook 
+  - Teacher's comments on X most recent school days, colored to show performance/attitude rating on a scale (X limited to 10)
+  - Activity (2 lines, y-axis with 2 scales): number of unique questions fully completed each day and success rate; show average rating of questions on each bar
+  - Spaced repetition tags boxes (exclude box -1): Compare changes between 3 days ago and current boxes of tags
+  - Pacing: Average time spent per MCQ/Point, filterable by tag or difficulty.
+  - Compare with classmates
 
 ## Notes
 

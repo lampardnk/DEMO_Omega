@@ -511,6 +511,30 @@ def view_question(question_id):
     
     return render_template('view_question.html', question=question)
 
+@app.route('/attempt_question/<question_id>')
+def attempt_question(question_id):
+    questions = load_questions(include_deleted=True)
+    question = next((q for q in questions if q.get('id') == question_id), None)
+    
+    if not question:
+        flash('Question not found!', 'error')
+        return redirect(url_for('index'))
+    
+    # Generate SVG if it hasn't been generated yet or if it's flagged for regeneration
+    if not question.get('svg') or question.get('svg_generated') is False:
+        question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+        question['svg_generated'] = True
+        save_questions(questions)
+    
+    # Get all tags for accessing the tag display names
+    all_tags = get_all_tags()
+    
+    # Function to get tag by ID for use in the template
+    def get_tag_by_id(tag_id):
+        return next((tag for tag in all_tags if tag['id'] == tag_id), None)
+    
+    return render_template('attempt_question.html', question=question, get_tag_by_id=get_tag_by_id)
+
 @app.route('/edit_question/<question_id>', methods=['GET', 'POST'])
 def edit_question(question_id):
     questions = load_questions(include_deleted=True)
@@ -673,7 +697,11 @@ def download_attachment(question_id, attachment_id):
         # For file attachments, serve the file
         attachment_dir = os.path.dirname(os.path.join(app.config['UPLOAD_FOLDER'], attachment['path']))
         filename = os.path.basename(attachment['path'])
-        return send_from_directory(attachment_dir, filename, as_attachment=True, 
+        
+        # Check if the file is a PDF to display it inline
+        is_pdf = attachment.get('file_type') == 'pdf' or filename.lower().endswith('.pdf')
+        
+        return send_from_directory(attachment_dir, filename, as_attachment=not is_pdf, 
                                   download_name=attachment['original_filename'])
 
 @app.route('/remove_attachment/<question_id>/<attachment_id>', methods=['POST'])
