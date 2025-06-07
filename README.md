@@ -108,21 +108,16 @@ DEMO_Omega/
   - Integrated video player
   - Image gallery with zoom/pan
 
-## TODO Features
-
 - **Question Attempt System**
-  - Interactive question answering interface
-  - Response recording and validation
-  - Progress tracking
+  - Add hardcoded answer when adding/editing
+  - Backend verify correctness
+  - View attempt history
 
 - **Hint System**
   - Multi-level hints for progressive help
   - Hint usage tracking
 
-- **Submission Management**
-  - View submission history
-  - Detailed submission analytics
-  - Performance reporting
+## TODO Features
 
 - **Quiz engine**
   - Generate quizzes by pulling from question bank
@@ -150,7 +145,6 @@ DEMO_Omega/
   - Teacher's comments on X most recent school days, colored to show performance/attitude rating on a scale (X limited to 10)
   - Activity (2 lines, y-axis with 2 scales): number of unique questions fully completed each day and success rate; show average rating of questions on each bar
   - Spaced repetition tags boxes (exclude box -1): Compare changes between 3 days ago and current boxes of tags
-  - Pacing: Average time spent per MCQ/Point, filterable by tag or difficulty.
   - Compare with classmates
 
 ## Notes

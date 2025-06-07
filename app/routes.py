@@ -40,6 +40,17 @@ def save_questions(questions):
     with open(app.config['QUESTIONS_FILE'], 'w') as f:
         json.dump(questions, f, indent=4, cls=DecimalEncoder)
 
+def load_submissions():
+    if os.path.exists(app.config['SUBMISSIONS_FILE']):
+        with open(app.config['SUBMISSIONS_FILE'], 'r') as f:
+            return json.load(f)
+    return []
+
+def save_submissions(submissions):
+    os.makedirs(os.path.dirname(app.config['SUBMISSIONS_FILE']), exist_ok=True)
+    with open(app.config['SUBMISSIONS_FILE'], 'w') as f:
+        json.dump(submissions, f, indent=4)
+
 def load_tags():
     """Load tags from the tags file"""
     if os.path.exists(app.config['TAGS_FILE']):
@@ -446,17 +457,43 @@ def add_question():
                     'description': 'URL Link'
                 })
         
+        # Process hints from the form
+        hints = []
+        hint_index = 0
+        while f'hint_text_{hint_index}' in request.form:
+            hint_text = request.form.get(f'hint_text_{hint_index}', '').strip()
+            hint_weight = request.form.get(f'hint_weight_{hint_index}', '5')
+            
+            # Validate hint text - must be 50 words or less
+            word_count = len(hint_text.split())
+            if hint_text and word_count <= 50:
+                try:
+                    weight = int(hint_weight)
+                    if 1 <= weight <= 10:
+                        hints.append({
+                            'id': str(uuid.uuid4()),
+                            'text': hint_text,
+                            'weight': weight
+                        })
+                except ValueError:
+                    # Skip invalid weights
+                    pass
+            
+            hint_index += 1
+        
         # Create the new question
         new_question = {
             'id': question_id,
             'name': form.name.data,
             'content': form.content.data,
+            'answer': form.answer.data,
             'svg': latex_svg,
             'svg_generated': False,  # Flag to indicate SVG needs to be generated
             'rating': float(form.rating.data),  # Convert Decimal to float
             'tags': selected_tag_ids,
             'deleted': False,
-            'attachments': url_attachments
+            'attachments': url_attachments,
+            'hints': hints  # Add hints to the question model
         }
         
         # Process file uploads if any
@@ -511,7 +548,7 @@ def view_question(question_id):
     
     return render_template('view_question.html', question=question)
 
-@app.route('/attempt_question/<question_id>')
+@app.route('/attempt_question/<question_id>', methods=['GET', 'POST'])
 def attempt_question(question_id):
     questions = load_questions(include_deleted=True)
     question = next((q for q in questions if q.get('id') == question_id), None)
@@ -519,13 +556,65 @@ def attempt_question(question_id):
     if not question:
         flash('Question not found!', 'error')
         return redirect(url_for('index'))
-    
+
+    if request.method == 'POST':
+        user_answer = request.form.get('answer', '').strip()
+        correct_answer = question.get('answer', '').strip()
+        
+        # Get the hints that were used from the form
+        used_hints = request.form.getlist('used_hints')
+        
+        # Map hint IDs to their positions for proper tracking
+        hint_positions = {}
+        for i, hint in enumerate(question.get('hints', []), 1):
+            hint_positions[hint['id']] = i
+        
+        # Create a structure to track both hint IDs and their positions
+        hint_data = []
+        for hint_id in used_hints:
+            if hint_id in hint_positions:
+                hint_data.append({
+                    'id': hint_id,
+                    'position': hint_positions[hint_id]
+                })
+            else:
+                # Handle unknown hints
+                hint_data.append({
+                    'id': hint_id,
+                    'position': 0  # unknown position
+                })
+        
+        # Simple string comparison
+        is_correct = user_answer.lower() == correct_answer.lower()
+        
+        submissions = load_submissions()
+        new_submission = {
+            'id': str(uuid.uuid4()),
+            'question_id': question_id,
+            'user_answer': user_answer,
+            'outcome': 'Correct' if is_correct else 'Incorrect',
+            'verdict': 'Your answer is correct.' if is_correct else 'Your answer is incorrect. Please try again.',
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'used_hints': used_hints,  # Keep the raw hint IDs
+            'hint_data': hint_data     # Add the enhanced hint data with positions
+        }
+        submissions.append(new_submission)
+        save_submissions(submissions)
+        
+        flash(new_submission['verdict'], 'success' if is_correct else 'error')
+        return redirect(url_for('attempt_question', question_id=question_id))
+
     # Generate SVG if it hasn't been generated yet or if it's flagged for regeneration
     if not question.get('svg') or question.get('svg_generated') is False:
         question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
         question['svg_generated'] = True
         save_questions(questions)
     
+    # Get submissions for this question
+    all_submissions = load_submissions()
+    question_submissions = [s for s in all_submissions if s['question_id'] == question_id]
+    question_submissions.sort(key=lambda x: x['timestamp'], reverse=True)
+
     # Get all tags for accessing the tag display names
     all_tags = get_all_tags()
     
@@ -533,7 +622,7 @@ def attempt_question(question_id):
     def get_tag_by_id(tag_id):
         return next((tag for tag in all_tags if tag['id'] == tag_id), None)
     
-    return render_template('attempt_question.html', question=question, get_tag_by_id=get_tag_by_id)
+    return render_template('attempt_question.html', question=question, get_tag_by_id=get_tag_by_id, submissions=question_submissions)
 
 @app.route('/edit_question/<question_id>', methods=['GET', 'POST'])
 def edit_question(question_id):
@@ -553,6 +642,7 @@ def edit_question(question_id):
         if 'name' in question:
             form.name.data = question['name']
         form.content.data = question['content']
+        form.answer.data = question.get('answer', '')
         form.rating.data = question['rating']
         # Tags are now selected from dropdown, not text input
     
@@ -607,13 +697,15 @@ def edit_question(question_id):
             'id': new_question_id,
             'name': form.name.data,
             'content': form.content.data,
+            'answer': form.answer.data,
             'svg': latex_svg,  # Use existing SVG initially
             'svg_generated': False,  # Flag to indicate SVG needs to be generated
             'rating': float(form.rating.data),
             'tags': selected_tag_ids,
             'deleted': False,
             'edited_from': question_id,  # Reference to the original question
-            'attachments': kept_attachments
+            'attachments': kept_attachments,
+            'hints': question.get('hints', [])  # Preserve hints from the original question
         }
         
         # Process new file uploads if any
@@ -884,4 +976,130 @@ def validate_file_uploads(files):
     if total_size > app.config['MAX_CONTENT_LENGTH']:
         return False, f"Total file size must be less than {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)}MB"
     
-    return True, "" 
+    return True, ""
+
+@app.route('/api/questions/<question_id>/hints', methods=['POST'])
+def add_hint(question_id):
+    """API endpoint to add a hint to a question"""
+    try:
+        data = request.get_json()
+        if not data or 'text' not in data or 'weight' not in data:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+        # Validate hint text - maximum 50 words
+        hint_text = data['text'].strip()
+        word_count = len(hint_text.split())
+        if word_count > 50:
+            return jsonify({'success': False, 'error': f'Hint text must be 50 words or less (currently {word_count} words)'}), 400
+
+        # Validate weight - must be integer between 1 and 10
+        try:
+            weight = int(data['weight'])
+            if weight < 1 or weight > 10:
+                return jsonify({'success': False, 'error': 'Weight must be between 1 and 10'}), 400
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Weight must be an integer'}), 400
+
+        # Load questions and find the target question
+        questions = load_questions(include_deleted=True)
+        question = next((q for q in questions if q.get('id') == question_id), None)
+        
+        if not question:
+            return jsonify({'success': False, 'error': 'Question not found'}), 404
+
+        # Create the new hint object
+        new_hint = {
+            'id': str(uuid.uuid4()),
+            'text': hint_text,
+            'weight': weight
+        }
+
+        # Add the hint to the question
+        if 'hints' not in question:
+            question['hints'] = []
+        question['hints'].append(new_hint)
+        save_questions(questions)
+
+        return jsonify({
+            'success': True,
+            'hint': new_hint
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/questions/<question_id>/hints/<hint_id>', methods=['PUT'])
+def update_hint(question_id, hint_id):
+    """API endpoint to update a hint"""
+    try:
+        data = request.get_json()
+        if not data or ('text' not in data and 'weight' not in data):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+        # Validate hint text if provided - maximum 50 words
+        if 'text' in data:
+            hint_text = data['text'].strip()
+            word_count = len(hint_text.split())
+            if word_count > 50:
+                return jsonify({'success': False, 'error': f'Hint text must be 50 words or less (currently {word_count} words)'}), 400
+
+        # Validate weight if provided - must be integer between 1 and 10
+        if 'weight' in data:
+            try:
+                weight = int(data['weight'])
+                if weight < 1 or weight > 10:
+                    return jsonify({'success': False, 'error': 'Weight must be between 1 and 10'}), 400
+            except ValueError:
+                return jsonify({'success': False, 'error': 'Weight must be an integer'}), 400
+
+        # Load questions and find the target question
+        questions = load_questions(include_deleted=True)
+        question = next((q for q in questions if q.get('id') == question_id), None)
+        
+        if not question:
+            return jsonify({'success': False, 'error': 'Question not found'}), 404
+
+        # Find the hint to update
+        hint = next((h for h in question.get('hints', []) if h.get('id') == hint_id), None)
+        if not hint:
+            return jsonify({'success': False, 'error': 'Hint not found'}), 404
+
+        # Update the hint
+        if 'text' in data:
+            hint['text'] = hint_text
+        if 'weight' in data:
+            hint['weight'] = weight
+
+        save_questions(questions)
+
+        return jsonify({
+            'success': True,
+            'hint': hint
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/questions/<question_id>/hints/<hint_id>', methods=['DELETE'])
+def delete_hint(question_id, hint_id):
+    """API endpoint to delete a hint"""
+    try:
+        # Load questions and find the target question
+        questions = load_questions(include_deleted=True)
+        question = next((q for q in questions if q.get('id') == question_id), None)
+        
+        if not question:
+            return jsonify({'success': False, 'error': 'Question not found'}), 404
+
+        # Find the hint to delete
+        hint = next((h for h in question.get('hints', []) if h.get('id') == hint_id), None)
+        if not hint:
+            return jsonify({'success': False, 'error': 'Hint not found'}), 404
+
+        # Remove the hint
+        question['hints'].remove(hint)
+        save_questions(questions)
+
+        return jsonify({
+            'success': True
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500 

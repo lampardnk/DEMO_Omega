@@ -1,0 +1,278 @@
+[
+    {
+        "id": "288a71d8-e419-453f-bca6-8e040d96bcc2",
+        "question_id": "7770cc89-bbfb-4a15-bece-e7e0ef8c86a7",
+        "user_answer": "tes",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 15:28:45"
+    },
+    {
+        "id": "2918ebe7-c0da-488a-aa38-4d667ce42cb9",
+        "question_id": "7770cc89-bbfb-4a15-bece-e7e0ef8c86a7",
+        "user_answer": "tess",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 15:29:01"
+    },
+    {
+        "id": "24c92145-f0bb-4c6a-bd03-4804c4d4cb5f",
+        "question_id": "7770cc89-bbfb-4a15-bece-e7e0ef8c86a7",
+        "user_answer": "test",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-07 15:29:11"
+    },
+    {
+        "id": "f8f14a43-39d3-48d0-b33d-a86db618697c",
+        "question_id": "sample-question-123",
+        "user_answer": "x = 2, x = 3",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-07 17:29:26",
+        "used_hints": [
+            "hint-1",
+            "hint-2",
+            "hint-3"
+        ]
+    },
+    {
+        "id": "841e371d-0b9c-4cc5-8a9f-87f2b6bcf505",
+        "question_id": "sample-question-123",
+        "user_answer": "test",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:29:37",
+        "used_hints": [
+            "hint-1",
+            "hint-2"
+        ]
+    },
+    {
+        "id": "90132f74-2de7-4c01-ae12-2812621c86a9",
+        "question_id": "8f068c3f-5b63-479a-8ada-862aeb1aec19",
+        "user_answer": "test",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-07 17:36:13",
+        "used_hints": [
+            "c54c3ca9-7c43-4c9d-bf7f-650aca05f067",
+            "d4f82bff-dec3-4980-b009-c54e4258c42b",
+            "477df304-8f7f-4cea-b20c-991a2e439517"
+        ]
+    },
+    {
+        "id": "3fbcbc9f-d455-40af-9328-771a1f766e31",
+        "question_id": "8f068c3f-5b63-479a-8ada-862aeb1aec19",
+        "user_answer": "test",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-07 17:37:21",
+        "used_hints": [
+            "c54c3ca9-7c43-4c9d-bf7f-650aca05f067"
+        ]
+    },
+    {
+        "id": "a52b233b-4ef0-4c77-9a82-7ba146ef3e0e",
+        "question_id": "8f068c3f-5b63-479a-8ada-862aeb1aec19",
+        "user_answer": "raerw",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:37:31",
+        "used_hints": [
+            "d4f82bff-dec3-4980-b009-c54e4258c42b",
+            "c54c3ca9-7c43-4c9d-bf7f-650aca05f067"
+        ]
+    },
+    {
+        "id": "8d6b3cb0-27d7-4390-bf11-b28659b4270f",
+        "question_id": "8f068c3f-5b63-479a-8ada-862aeb1aec19",
+        "user_answer": "rwqr",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:40:08",
+        "used_hints": [
+            "c54c3ca9-7c43-4c9d-bf7f-650aca05f067"
+        ],
+        "hint_data": [
+            {
+                "id": "c54c3ca9-7c43-4c9d-bf7f-650aca05f067",
+                "position": 1
+            }
+        ]
+    },
+    {
+        "id": "136927fd-63b9-417a-b5c2-765c95f443ae",
+        "question_id": "c965335c-4433-4933-ae45-1708c4cd0c67",
+        "user_answer": "weqr",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:52:07",
+        "used_hints": [
+            "5835f0be-1020-42c9-bfac-ddb7115f0ba7"
+        ],
+        "hint_data": [
+            {
+                "id": "5835f0be-1020-42c9-bfac-ddb7115f0ba7",
+                "position": 1
+            }
+        ]
+    },
+    {
+        "id": "e45f85e8-0b99-4553-9bf4-158d6e105f9b",
+        "question_id": "c965335c-4433-4933-ae45-1708c4cd0c67",
+        "user_answer": "test",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-07 17:52:17",
+        "used_hints": [],
+        "hint_data": []
+    },
+    {
+        "id": "a8809861-d33e-4625-bc98-b226b7931e53",
+        "question_id": "20887ae5-af81-4408-8b73-7ea62a276297",
+        "user_answer": "qwre",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:55:58",
+        "used_hints": [],
+        "hint_data": []
+    },
+    {
+        "id": "2d150750-bff5-46cf-b9d3-311d49100916",
+        "question_id": "20887ae5-af81-4408-8b73-7ea62a276297",
+        "user_answer": "qwer",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:56:03",
+        "used_hints": [
+            "98b547a2-66d0-491e-824a-d476f73890c2"
+        ],
+        "hint_data": [
+            {
+                "id": "98b547a2-66d0-491e-824a-d476f73890c2",
+                "position": 1
+            }
+        ]
+    },
+    {
+        "id": "fdc491b0-83ea-4c90-858a-957124139d14",
+        "question_id": "dede0ff6-e11d-43c2-a153-122520b5b9f6",
+        "user_answer": "qwer",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:59:08",
+        "used_hints": [
+            "ea779cd5-480a-47a4-af5a-4a7b76bbe7a9",
+            "d6b8400f-20d3-4e57-9da7-2fc7824d64a8"
+        ],
+        "hint_data": [
+            {
+                "id": "ea779cd5-480a-47a4-af5a-4a7b76bbe7a9",
+                "position": 1
+            },
+            {
+                "id": "d6b8400f-20d3-4e57-9da7-2fc7824d64a8",
+                "position": 2
+            }
+        ]
+    },
+    {
+        "id": "aa6e1bf3-043a-46d8-bded-ec0340b879ca",
+        "question_id": "dede0ff6-e11d-43c2-a153-122520b5b9f6",
+        "user_answer": "test",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:59:15",
+        "used_hints": [
+            "d6b8400f-20d3-4e57-9da7-2fc7824d64a8"
+        ],
+        "hint_data": [
+            {
+                "id": "d6b8400f-20d3-4e57-9da7-2fc7824d64a8",
+                "position": 2
+            }
+        ]
+    },
+    {
+        "id": "32a756f8-7517-4237-a23d-199d4c56d11c",
+        "question_id": "dede0ff6-e11d-43c2-a153-122520b5b9f6",
+        "user_answer": "",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 17:59:28",
+        "used_hints": [],
+        "hint_data": []
+    },
+    {
+        "id": "d2745f81-4bd5-41b0-94e4-eb20bb7d8351",
+        "question_id": "dede0ff6-e11d-43c2-a153-122520b5b9f6",
+        "user_answer": "1",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-07 17:59:32",
+        "used_hints": [],
+        "hint_data": []
+    },
+    {
+        "id": "ec6af10d-0313-460a-b4d8-fac0f1bc3772",
+        "question_id": "dede0ff6-e11d-43c2-a153-122520b5b9f6",
+        "user_answer": "1",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-07 17:59:37",
+        "used_hints": [
+            "d6b8400f-20d3-4e57-9da7-2fc7824d64a8"
+        ],
+        "hint_data": [
+            {
+                "id": "d6b8400f-20d3-4e57-9da7-2fc7824d64a8",
+                "position": 2
+            }
+        ]
+    },
+    {
+        "id": "3b864fa9-8b4c-4c52-b46d-2e6c6788caaa",
+        "question_id": "a7eed1ca-47ba-4cf7-a7a7-6e1ac572f0b0",
+        "user_answer": "t",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 18:00:16",
+        "used_hints": [
+            "ea779cd5-480a-47a4-af5a-4a7b76bbe7a9"
+        ],
+        "hint_data": [
+            {
+                "id": "ea779cd5-480a-47a4-af5a-4a7b76bbe7a9",
+                "position": 1
+            }
+        ]
+    },
+    {
+        "id": "7b5c0a03-2b8b-4981-8c2c-c298bbb6ab8f",
+        "question_id": "a7eed1ca-47ba-4cf7-a7a7-6e1ac572f0b0",
+        "user_answer": "tert",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-07 18:00:24",
+        "used_hints": [],
+        "hint_data": []
+    },
+    {
+        "id": "431fb2e3-8853-4570-a11a-4facc9d6e2fb",
+        "question_id": "a7eed1ca-47ba-4cf7-a7a7-6e1ac572f0b0",
+        "user_answer": "1",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-07 18:00:29",
+        "used_hints": [
+            "ea779cd5-480a-47a4-af5a-4a7b76bbe7a9"
+        ],
+        "hint_data": [
+            {
+                "id": "ea779cd5-480a-47a4-af5a-4a7b76bbe7a9",
+                "position": 1
+            }
+        ]
+    }
+]

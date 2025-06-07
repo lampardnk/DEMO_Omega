@@ -6,6 +6,7 @@ from wtforms.validators import DataRequired, NumberRange, Optional, URL
 class QuestionForm(FlaskForm):
     name = StringField('Question Name', validators=[DataRequired()])
     content = TextAreaField('LaTeX Content', validators=[DataRequired()])
+    answer = TextAreaField('Answer', validators=[DataRequired()])
     rating = DecimalField('Difficulty Rating (1.0-10.0)', 
                           validators=[DataRequired(), 
                                      NumberRange(min=1.0, max=10.0, 

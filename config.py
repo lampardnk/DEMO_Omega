@@ -7,6 +7,7 @@ load_dotenv(os.path.join(basedir, '.env'))
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
     QUESTIONS_FILE = os.path.join(basedir, 'app/data/questions.json')
+    SUBMISSIONS_FILE = os.path.join(basedir, 'app/data/submissions.json')
     TAGS_FILE = os.path.join(basedir, 'app/data/tags.json')
     UPLOAD_FOLDER = os.path.join(basedir, 'app/uploads')
     MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MB max upload size
