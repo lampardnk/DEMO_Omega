@@ -412,6 +412,10 @@ def questionbank():
                           sort_by=sort_by, all_tags=all_tags, show_deleted=show_deleted,
                           search_query=search_query)
 
+@app.route('/quiz_engine')
+def quiz_engine():
+    return render_template('quiz_engine.html')
+
 @app.route('/about')
 def about():
     return render_template('about.html')

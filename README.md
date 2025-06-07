@@ -122,8 +122,8 @@ DEMO_Omega/
 - **Quiz engine**
   - Generate quizzes by pulling from question bank
   - Spaced Repetition mode
-  - Focus mode
-  - Spread mode 
+  - Focus mode (set rating range, set tags)
+  - Spread mode (same as focus, but force spreading of tags) 
   - Road to Olymmpia (Ramping difficulty)
   - Custom Quizpacks
 
