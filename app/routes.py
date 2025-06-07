@@ -4,17 +4,16 @@ import re
 import tempfile
 import subprocess
 import shutil
+import hashlib
 from flask import render_template, request, redirect, url_for, jsonify, flash, session, send_from_directory
 from werkzeug.utils import secure_filename
 from app import app
 from app.forms import QuestionForm, AttachmentForm
-import matplotlib.pyplot as plt
-import numpy as np
-import io
-import base64
 import uuid
 from decimal import Decimal
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import base64
+import time
+import mimetypes
 
 # Custom JSON encoder to handle Decimal objects
 class DecimalEncoder(json.JSONEncoder):
@@ -23,12 +22,15 @@ class DecimalEncoder(json.JSONEncoder):
             return float(obj)
         return super(DecimalEncoder, self).default(obj)
 
+# LaTeX compilation cache
+LATEX_CACHE = {}
+CACHE_EXPIRY = 3600  # Cache expiry in seconds (1 hour)
+
 def load_questions(include_deleted=False):
     if os.path.exists(app.config['QUESTIONS_FILE']):
         with open(app.config['QUESTIONS_FILE'], 'r') as f:
             questions = json.load(f)
             if not include_deleted:
-                # Filter out questions marked as deleted
                 questions = [q for q in questions if not q.get('deleted', False)]
             return questions
     return []
@@ -38,124 +40,268 @@ def save_questions(questions):
     with open(app.config['QUESTIONS_FILE'], 'w') as f:
         json.dump(questions, f, indent=4, cls=DecimalEncoder)
 
-def get_all_tags():
-    """Get all unique tags from the questions"""
-    all_tags = set()
-    for question in load_questions():
-        for tag in question.get('tags', []):
-            all_tags.add(tag)
-    return sorted(all_tags)
+def load_submissions():
+    if os.path.exists(app.config['SUBMISSIONS_FILE']):
+        with open(app.config['SUBMISSIONS_FILE'], 'r') as f:
+            return json.load(f)
+    return []
 
-def check_latex_packages(latex_content):
-    """Check if the LaTeX content requires special packages"""
-    needs_tikz = "\\begin{tikzpicture}" in latex_content or "\\tikz" in latex_content
-    needs_circuitikz = "\\begin{circuitikz}" in latex_content
-    needs_scope = "\\begin{scope}" in latex_content
-    
-    return needs_tikz, needs_circuitikz, needs_scope
+def save_submissions(submissions):
+    os.makedirs(os.path.dirname(app.config['SUBMISSIONS_FILE']), exist_ok=True)
+    with open(app.config['SUBMISSIONS_FILE'], 'w') as f:
+        json.dump(submissions, f, indent=4)
+
+def load_tags():
+    """Load tags from the tags file"""
+    if os.path.exists(app.config['TAGS_FILE']):
+        with open(app.config['TAGS_FILE'], 'r') as f:
+            return json.load(f)
+    return []
+
+def save_tags(tags):
+    """Save tags to the tags file"""
+    os.makedirs(os.path.dirname(app.config['TAGS_FILE']), exist_ok=True)
+    with open(app.config['TAGS_FILE'], 'w') as f:
+        json.dump(tags, f, indent=4)
+
+def get_all_tags():
+    """Get all tags with their IDs and display names"""
+    return load_tags()
+
+def get_tag_by_id(tag_id):
+    """Get a tag by its ID"""
+    tags = load_tags()
+    for tag in tags:
+        if tag['id'] == tag_id:
+            return tag
+    return None
+
+def get_tag_display_name(tag_id):
+    """Get the display name for a tag ID"""
+    tag = get_tag_by_id(tag_id)
+    return tag['display_name'] if tag else tag_id
+
+def get_latex_cache_key(latex_string):
+    """Generate a cache key for LaTeX content"""
+    return hashlib.md5(latex_string.encode('utf-8')).hexdigest()
 
 def latex_to_svg(latex_string):
-    """
-    Convert LaTeX to SVG image
-    Will use matplotlib for simple LaTeX and a full LaTeX compiler for complex environments like TikZ
-    """
-    # Check if we need special LaTeX packages
-    needs_tikz, needs_circuitikz, needs_scope = check_latex_packages(latex_string)
+    """Convert LaTeX to SVG using command line tools with caching."""
+    # Check cache first
+    cache_key = get_latex_cache_key(latex_string)
+    current_time = time.time()
     
-    # If we need special packages, use a full LaTeX compiler
-    if needs_tikz or needs_circuitikz or needs_scope:
-        return compile_complex_latex(latex_string, needs_tikz, needs_circuitikz, needs_scope)
+    # Return from cache if available and not expired
+    if cache_key in LATEX_CACHE:
+        cached_item = LATEX_CACHE[cache_key]
+        if current_time - cached_item['timestamp'] < CACHE_EXPIRY:
+            return cached_item['svg']
     
-    # For simple LaTeX, use matplotlib
-    fig = plt.figure(figsize=(5, 0.5))
-    plt.axis('off')
-    plt.text(0.5, 0.5, f"${latex_string}$", size=14, ha='center', va='center')
+    # Not in cache or expired, generate SVG
+    svg_data = _generate_latex_svg(latex_string)
     
-    # Convert the figure to a PNG and then encode to base64
-    buf = io.BytesIO()
-    FigureCanvas(fig).print_png(buf)
-    plt.close(fig)
+    # Store in cache
+    LATEX_CACHE[cache_key] = {
+        'svg': svg_data,
+        'timestamp': current_time
+    }
     
-    # Return base64 encoded image
-    data = base64.b64encode(buf.getbuffer()).decode("ascii")
-    return f"data:image/png;base64,{data}"
+    # Clean old cache entries
+    _clean_latex_cache()
+    
+    return svg_data
 
-def compile_complex_latex(latex_content, needs_tikz=False, needs_circuitikz=False, needs_scope=False):
-    """Compile complex LaTeX with TikZ, CircuiTikZ, etc. using a full LaTeX compiler"""
-    # Create a temporary directory for LaTeX compilation
+def _clean_latex_cache():
+    """Remove expired items from the LaTeX cache"""
+    current_time = time.time()
+    expired_keys = [k for k, v in LATEX_CACHE.items() 
+                   if current_time - v['timestamp'] > CACHE_EXPIRY]
+    
+    for key in expired_keys:
+        del LATEX_CACHE[key]
+
+def _generate_latex_svg(latex_string):
+    """Internal function to generate SVG from LaTeX without caching."""
+    # Create a temporary directory for processing
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Create the LaTeX document
-        latex_document = []
-        latex_document.append("\\documentclass[border=10pt]{standalone}")
-        latex_document.append("\\usepackage{amsmath,amssymb}")
-        
-        # Add required packages based on content
-        if needs_tikz or needs_scope:
-            latex_document.append("\\usepackage{tikz}")
-        if needs_circuitikz:
-            latex_document.append("\\usepackage{circuitikz}")
-        
-        # Start the document
-        latex_document.append("\\begin{document}")
-        
-        # Add the LaTeX content
-        if needs_tikz or needs_circuitikz or needs_scope:
-            # For TikZ or CircuiTikZ content, add directly
-            latex_document.append(latex_content)
-        else:
-            # For regular math, wrap in equation environment
-            latex_document.append("$" + latex_content + "$")
-        
-        # End the document
-        latex_document.append("\\end{document}")
-        
-        # Write the LaTeX document to a file
-        tex_file = os.path.join(temp_dir, "latex_content.tex")
+        # Write the LaTeX content to a temporary file, adding extra newlines for safety
+        tex_file = os.path.join(temp_dir, "content.tex")
         with open(tex_file, "w") as f:
-            f.write("\n".join(latex_document))
+            f.write(latex_string + "\n\n")
         
         try:
-            # Compile LaTeX to PDF using pdflatex
-            subprocess.run(
-                ["pdflatex", "-interaction=nonstopmode", "-output-directory", temp_dir, tex_file],
+            # Run pdflatex to create PDF
+            result = subprocess.run(
+                ["pdflatex", "-shell-escape", "-interaction=nonstopmode", "-output-directory", temp_dir, tex_file],
+                check=False,  # Don't raise exception on non-zero exit
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                check=True,
+                text=True
             )
             
-            # Convert PDF to PNG using pdf2image or another tool
-            pdf_file = os.path.join(temp_dir, "latex_content.pdf")
-            png_file = os.path.join(temp_dir, "latex_content.png")
+            # Check if pdflatex succeeded
+            if result.returncode != 0:
+                # Try to extract the error message from the log
+                log_file = os.path.join(temp_dir, "content.log")
+                error_message = "LaTeX compilation failed"
+                
+                if os.path.exists(log_file):
+                    with open(log_file, 'r') as f:
+                        log_content = f.read()
+                        # Extract error message from the log
+                        error_patterns = [
+                            r'! (.+?)\n',  # Common error pattern
+                            r'! LaTeX Error: (.+?)\n',  # LaTeX specific error
+                            r'! Package (.+?) Error: (.+?)\n'  # Package error
+                        ]
+                        
+                        for pattern in error_patterns:
+                            matches = re.findall(pattern, log_content)
+                            if matches:
+                                if isinstance(matches[0], tuple):
+                                    error_message = ': '.join(matches[0])
+                                else:
+                                    error_message = matches[0]
+                                break
+                
+                raise subprocess.CalledProcessError(
+                    result.returncode, 
+                    result.args, 
+                    output=result.stdout, 
+                    stderr=error_message
+                )
             
-            # Use pdftoppm or similar to convert PDF to PNG
-            subprocess.run(
-                ["pdftoppm", "-png", "-singlefile", "-r", "300", pdf_file, os.path.join(temp_dir, "latex_content")],
+            # Convert PDF to SVG using pdf2svg
+            pdf_file = os.path.join(temp_dir, "content.pdf")
+            svg_file = os.path.join(temp_dir, "content.svg")
+            
+            if os.path.exists(pdf_file):
+                svg_result = subprocess.run(
+                    ["pdf2svg", pdf_file, svg_file],
+                    check=True,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=True,
+                    stderr=subprocess.PIPE
             )
             
-            # Read the PNG file and convert to base64
-            with open(png_file, "rb") as f:
-                png_data = f.read()
+                # Read the SVG file
+                with open(svg_file, "r") as f:
+                    svg_content = f.read()
             
-            # Return base64 encoded image
-            base64_data = base64.b64encode(png_data).decode("ascii")
-            return f"data:image/png;base64,{base64_data}"
+                # Return base64 encoded SVG
+                base64_data = base64.b64encode(svg_content.encode()).decode("ascii")
+                return f"data:image/svg+xml;base64,{base64_data}"
+            else:
+                raise FileNotFoundError("PDF file was not created")
             
         except subprocess.CalledProcessError as e:
-            # If compilation fails, return error message as image
-            error_text = f"LaTeX compilation error: {e}"
-            fig = plt.figure(figsize=(6, 1))
-            plt.axis('off')
-            plt.text(0.5, 0.5, error_text, color='red', ha='center', va='center')
-            
-            buf = io.BytesIO()
-            FigureCanvas(fig).print_png(buf)
-            plt.close(fig)
-            
-            data = base64.b64encode(buf.getbuffer()).decode("ascii")
-            return f"data:image/png;base64,{data}"
+            # If compilation fails, provide an error message with the actual error
+            error_message = f"LaTeX error: {e.stderr}"
+            error_svg = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100" viewBox="0 0 500 100">
+    <rect width="500" height="100" fill="#f8d7da" stroke="#f5c6cb" stroke-width="1" rx="5" ry="5"/>
+    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="14" fill="#721c24">
+        {error_message}
+    </text>
+</svg>'''
+            base64_data = base64.b64encode(error_svg.encode()).decode("ascii")
+            return f"data:image/svg+xml;base64,{base64_data}"
+        except (FileNotFoundError, OSError) as e:
+            # If tools are missing or other system errors
+            error_message = f"System error: {str(e)}"
+            error_svg = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100" viewBox="0 0 500 100">
+    <rect width="500" height="100" fill="#f8d7da" stroke="#f5c6cb" stroke-width="1" rx="5" ry="5"/>
+    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="14" fill="#721c24">
+        {error_message}
+    </text>
+</svg>'''
+            base64_data = base64.b64encode(error_svg.encode()).decode("ascii")
+            return f"data:image/svg+xml;base64,{base64_data}"
+
+# New function to ensure a complete LaTeX document
+def ensure_complete_latex_document(latex_content):
+    """Makes sure the LaTeX content is a complete document by adding preamble and document environment if needed."""
+    # Check if it's already a complete document
+    if "\\documentclass" in latex_content:
+        return latex_content
+    
+    # Detect what environments are present to add appropriate packages
+    packages = ["\\usepackage{amsmath}", "\\usepackage{amssymb}"]
+    
+    # Add tikz package if needed
+    if "\\begin{tikzpicture}" in latex_content:
+        packages.append("\\usepackage{tikz}")
+    
+    # Add circuitikz package if needed
+    if "\\begin{circuitikz}" in latex_content:
+        packages.append("\\usepackage{circuitikz}")
+    
+    # Add enumitem if enumerate is used with custom labels
+    if "\\begin{enumerate}" in latex_content:
+        packages.append("\\usepackage{enumitem}")
+        
+    # Add geometry package for better margins
+    packages.append("\\usepackage{geometry}")
+    packages.append("\\geometry{margin=1in}")
+    
+    # Add preview package for cropping white space
+    packages.append("\\usepackage[active,tightpage]{preview}")
+    
+    # Create a complete document using exam document class
+    complete_document = "\\documentclass{exam}\n"
+    complete_document += "\n".join(packages) + "\n\n"
+    
+    # Add preview environment based on what's in the content
+    preview_env = "document"  # Default to previewing the whole document
+    
+    # Check for specific environments to preview
+    if "\\begin{questions}" in latex_content:
+        preview_env = "questions"
+    elif "\\begin{tikzpicture}" in latex_content:
+        preview_env = "tikzpicture"
+    elif "\\begin{circuitikz}" in latex_content:
+        preview_env = "circuitikz"
+        
+    complete_document += f"\\PreviewEnvironment{{{preview_env}}}\n\n"
+    complete_document += "\\begin{document}\n\n"
+    
+    # For plain math expressions, wrap in questions environment to benefit from preview
+    if not any(env in latex_content for env in ["\\begin{questions}", "\\begin{tikzpicture}", "\\begin{circuitikz}"]):
+        complete_document += "\\begin{questions}\n\\question\n"
+        complete_document += latex_content + "\n"
+        complete_document += "\\end{questions}\n"
+    else:
+        complete_document += latex_content + "\n\n"
+        
+    complete_document += "\\end{document}"
+    
+    return complete_document
+
+@app.route('/api/compile-latex', methods=['POST'])
+def compile_latex():
+    """API endpoint to compile LaTeX to SVG and return the result."""
+    try:
+        data = request.get_json()
+        if not data or 'latex' not in data:
+            return jsonify({'success': False, 'error': 'No LaTeX content provided'}), 400
+        
+        latex_content = data['latex']
+        
+        # Ensure it's a complete document
+        complete_latex = ensure_complete_latex_document(latex_content)
+        
+        # Compile to SVG (will use cache if available)
+        svg_data = latex_to_svg(complete_latex)
+        
+        return jsonify({
+            'success': True,
+            'svg': svg_data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 def save_attachment(file, question_id):
     """Save an uploaded attachment file"""
@@ -167,27 +313,56 @@ def save_attachment(file, question_id):
     file_path = os.path.join(attachment_dir, filename)
     file.save(file_path)
     
+    # Get file extension
+    extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    
+    # Determine file type category
+    file_category = 'other'
+    if extension in app.config['VIEWABLE_EXTENSIONS']:
+        if extension == 'pdf':
+            file_category = 'pdf'
+        elif extension in ['webm', 'mp4']:
+            file_category = 'video'
+        elif extension in ['png', 'jpg', 'jpeg']:
+            file_category = 'image'
+    elif extension in app.config['DOWNLOADABLE_EXTENSIONS']:
+        file_category = 'document'
+    
+    # Get mime type
+    mime_type = file.content_type or mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    
     # Create attachment info
     attachment = {
         'id': str(uuid.uuid4()),
         'filename': filename,
         'original_filename': file.filename,
         'path': os.path.join(question_id, filename),
-        'type': file.content_type
+        'type': mime_type,
+        'file_type': extension,
+        'category': file_category
     }
     
     return attachment
 
 @app.route('/')
 def index():
+    # Redirect to question bank page instead of about page
+    return redirect(url_for('questionbank'))
+
+@app.route('/questionbank')
+def questionbank():
     # Check if we should show deleted questions
     show_deleted = request.args.get('show_deleted', 'false').lower() == 'true'
-    
-    questions = load_questions(include_deleted=show_deleted)
     
     # Get filter tags from request (can be multiple)
     filter_tags = request.args.getlist('tags')
     sort_by = request.args.get('sort', 'newest')
+    
+    # Get search query if any
+    search_query = request.args.get('search', '').strip().lower()
+    
+    # Load questions from the JSON file
+    questions = load_questions(include_deleted=show_deleted)
     
     # Filter by multiple tags if specified
     if filter_tags:
@@ -198,6 +373,18 @@ def index():
                 filtered_questions.append(question)
         questions = filtered_questions
     
+    # Filter by search query if specified
+    if search_query:
+        search_results = []
+        for question in questions:
+            # Check if search query is in name or content
+            name = question.get('name', '').lower()
+            content = question.get('content', '').lower()
+            
+            if search_query in name or search_query in content:
+                search_results.append(question)
+        questions = search_results
+    
     # Sort questions
     if sort_by == 'rating_asc':
         questions.sort(key=lambda x: float(x.get('rating', 0)))
@@ -206,11 +393,36 @@ def index():
     elif sort_by == 'newest':
         questions.sort(key=lambda x: x.get('id', 0), reverse=True)
     
-    # Get all unique tags for the filter dropdown
+    # Check for any questions that need SVG generation
+    updated = False
+    for question in questions:
+        if not question.get('svg') or question.get('svg_generated') is False:
+            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+            question['svg_generated'] = True
+            updated = True
+    
+    # Save the updated questions if any SVGs were generated
+    if updated:
+        save_questions(load_questions(include_deleted=True))
+    
+    # Get all tags for the filter dropdown
     all_tags = get_all_tags()
     
     return render_template('index.html', questions=questions, filter_tags=filter_tags, 
-                          sort_by=sort_by, all_tags=all_tags, show_deleted=show_deleted)
+                          sort_by=sort_by, all_tags=all_tags, show_deleted=show_deleted,
+                          search_query=search_query)
+
+@app.route('/quiz_engine')
+def quiz_engine():
+    return render_template('quiz_engine.html')
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
+
+@app.route('/dashboard')
+def dashboard():
+    return render_template('dashboard.html')
 
 @app.route('/add_question', methods=['GET', 'POST'])
 def add_question():
@@ -223,18 +435,19 @@ def add_question():
     if form.validate_on_submit():
         questions = load_questions(include_deleted=True)
         
-        # Parse tags from comma-separated string to list and add selected tags
-        input_tags = [tag.strip() for tag in form.tags.data.split(',') if tag.strip()]
-        selected_tags = request.form.getlist('selected_tags')
+        # Get selected tag IDs from the form
+        selected_tag_ids = request.form.getlist('selected_tags')
         
-        # Combine both sets of tags and remove duplicates
-        combined_tags = list(set(input_tags + selected_tags))
+        # Ensure at least one tag is provided
+        if not selected_tag_ids:
+            flash('Please select at least one tag for the question.', 'error')
+            return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
         
         # Generate unique ID for the question
         question_id = str(uuid.uuid4())
         
-        # Generate SVG from LaTeX
-        latex_svg = latex_to_svg(form.content.data)
+        # We'll generate the SVG later when viewing the question
+        latex_svg = ''
         
         # Process and save any URL attachments
         urls = request.form.getlist('attachment_url')
@@ -248,26 +461,69 @@ def add_question():
                     'description': 'URL Link'
                 })
         
+        # Process hints from the form
+        hints = []
+        hint_index = 0
+        while f'hint_text_{hint_index}' in request.form:
+            hint_text = request.form.get(f'hint_text_{hint_index}', '').strip()
+            hint_weight = request.form.get(f'hint_weight_{hint_index}', '5')
+            
+            # Validate hint text - must be 50 words or less
+            word_count = len(hint_text.split())
+            if hint_text and word_count <= 50:
+                try:
+                    weight = int(hint_weight)
+                    if 1 <= weight <= 10:
+                        hints.append({
+                            'id': str(uuid.uuid4()),
+                            'text': hint_text,
+                            'weight': weight
+                        })
+                except ValueError:
+                    # Skip invalid weights
+                    pass
+            
+            hint_index += 1
+        
         # Create the new question
         new_question = {
             'id': question_id,
+            'name': form.name.data,
             'content': form.content.data,
+            'answer': form.answer.data,
             'svg': latex_svg,
+            'svg_generated': False,  # Flag to indicate SVG needs to be generated
             'rating': float(form.rating.data),  # Convert Decimal to float
-            'tags': combined_tags,
+            'tags': selected_tag_ids,
             'deleted': False,
-            'attachments': url_attachments
+            'attachments': url_attachments,
+            'hints': hints  # Add hints to the question model
         }
         
         # Process file uploads if any
         if 'attachment_file' in request.files:
             files = request.files.getlist('attachment_file')
-            file_attachments = []
+            # Debug info
+            file_names = [f.filename for f in files if f and f.filename]
+            flash(f"Files detected: {len(file_names)} - {', '.join(file_names)}", 'info')
             
-            for file in files:
-                if file and file.filename:
+            valid_files = [f for f in files if f and f.filename]
+            
+            # Validate files against limits
+            is_valid, error_message = validate_file_uploads(valid_files)
+            if not is_valid:
+                flash(error_message, 'error')
+                return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
+            
+            file_attachments = []
+            for file in valid_files:
+                if allowed_file(file.filename):
                     attachment = save_attachment(file, question_id)
                     file_attachments.append(attachment)
+                else:
+                    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'unknown'
+                    flash(f'File type {ext} is not allowed', 'error')
+                    return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
             
             # Add file attachments to question
             new_question['attachments'].extend(file_attachments)
@@ -275,7 +531,7 @@ def add_question():
         questions.append(new_question)
         save_questions(questions)
         flash('Question added successfully!', 'success')
-        return redirect(url_for('index'))
+        return redirect(url_for('questionbank'))
     
     return render_template('add_question.html', form=form, attachment_form=attachment_form, all_tags=all_tags)
 
@@ -288,7 +544,89 @@ def view_question(question_id):
         flash('Question not found!', 'error')
         return redirect(url_for('index'))
     
+    # Generate SVG if it hasn't been generated yet or if it's flagged for regeneration
+    if not question.get('svg') or question.get('svg_generated') is False:
+        question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+        question['svg_generated'] = True
+        save_questions(questions)
+    
     return render_template('view_question.html', question=question)
+
+@app.route('/attempt_question/<question_id>', methods=['GET', 'POST'])
+def attempt_question(question_id):
+    questions = load_questions(include_deleted=True)
+    question = next((q for q in questions if q.get('id') == question_id), None)
+    
+    if not question:
+        flash('Question not found!', 'error')
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        user_answer = request.form.get('answer', '').strip()
+        correct_answer = question.get('answer', '').strip()
+        
+        # Get the hints that were used from the form
+        used_hints = request.form.getlist('used_hints')
+        
+        # Map hint IDs to their positions for proper tracking
+        hint_positions = {}
+        for i, hint in enumerate(question.get('hints', []), 1):
+            hint_positions[hint['id']] = i
+        
+        # Create a structure to track both hint IDs and their positions
+        hint_data = []
+        for hint_id in used_hints:
+            if hint_id in hint_positions:
+                hint_data.append({
+                    'id': hint_id,
+                    'position': hint_positions[hint_id]
+                })
+            else:
+                # Handle unknown hints
+                hint_data.append({
+                    'id': hint_id,
+                    'position': 0  # unknown position
+                })
+        
+        # Simple string comparison
+        is_correct = user_answer.lower() == correct_answer.lower()
+        
+        submissions = load_submissions()
+        new_submission = {
+            'id': str(uuid.uuid4()),
+            'question_id': question_id,
+            'user_answer': user_answer,
+            'outcome': 'Correct' if is_correct else 'Incorrect',
+            'verdict': 'Your answer is correct.' if is_correct else 'Your answer is incorrect. Please try again.',
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'used_hints': used_hints,  # Keep the raw hint IDs
+            'hint_data': hint_data     # Add the enhanced hint data with positions
+        }
+        submissions.append(new_submission)
+        save_submissions(submissions)
+        
+        flash(new_submission['verdict'], 'success' if is_correct else 'error')
+        return redirect(url_for('attempt_question', question_id=question_id))
+
+    # Generate SVG if it hasn't been generated yet or if it's flagged for regeneration
+    if not question.get('svg') or question.get('svg_generated') is False:
+        question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+        question['svg_generated'] = True
+        save_questions(questions)
+    
+    # Get submissions for this question
+    all_submissions = load_submissions()
+    question_submissions = [s for s in all_submissions if s['question_id'] == question_id]
+    question_submissions.sort(key=lambda x: x['timestamp'], reverse=True)
+
+    # Get all tags for accessing the tag display names
+    all_tags = get_all_tags()
+    
+    # Function to get tag by ID for use in the template
+    def get_tag_by_id(tag_id):
+        return next((tag for tag in all_tags if tag['id'] == tag_id), None)
+    
+    return render_template('attempt_question.html', question=question, get_tag_by_id=get_tag_by_id, submissions=question_submissions)
 
 @app.route('/edit_question/<question_id>', methods=['GET', 'POST'])
 def edit_question(question_id):
@@ -297,7 +635,7 @@ def edit_question(question_id):
     
     if not question:
         flash('Question not found!', 'error')
-        return redirect(url_for('index'))
+        return redirect(url_for('questionbank'))
     
     form = QuestionForm()
     attachment_form = AttachmentForm()
@@ -305,26 +643,31 @@ def edit_question(question_id):
     
     if request.method == 'GET':
         # Pre-populate the form with existing question data
+        if 'name' in question:
+            form.name.data = question['name']
         form.content.data = question['content']
+        form.answer.data = question.get('answer', '')
         form.rating.data = question['rating']
-        form.tags.data = ', '.join(question['tags'])
+        # Tags are now selected from dropdown, not text input
     
     if form.validate_on_submit():
         # Mark the old question as deleted
         question['deleted'] = True
         
-        # Parse tags from comma-separated string to list and add selected tags
-        input_tags = [tag.strip() for tag in form.tags.data.split(',') if tag.strip()]
-        selected_tags = request.form.getlist('selected_tags')
+        # Get selected tag IDs from the form
+        selected_tag_ids = request.form.getlist('selected_tags')
         
-        # Combine both sets of tags and remove duplicates
-        combined_tags = list(set(input_tags + selected_tags))
+        # Ensure at least one tag is provided
+        if not selected_tag_ids:
+            flash('Please select at least one tag for the question.', 'error')
+            return render_template('edit_question.html', form=form, attachment_form=attachment_form, question=question, all_tags=all_tags)
         
         # Generate unique ID for the new question
         new_question_id = str(uuid.uuid4())
         
-        # Generate SVG from LaTeX
-        latex_svg = latex_to_svg(form.content.data)
+        # We'll generate the SVG later when viewing the question to speed up the edit page
+        # Initially use the old SVG if available
+        latex_svg = question.get('svg', '')
         
         # Get existing attachments to keep
         kept_attachments = []
@@ -356,22 +699,55 @@ def edit_question(question_id):
         # Create a new question with the edited data
         new_question = {
             'id': new_question_id,
+            'name': form.name.data,
             'content': form.content.data,
-            'svg': latex_svg,
+            'answer': form.answer.data,
+            'svg': latex_svg,  # Use existing SVG initially
+            'svg_generated': False,  # Flag to indicate SVG needs to be generated
             'rating': float(form.rating.data),
-            'tags': combined_tags,
+            'tags': selected_tag_ids,
             'deleted': False,
             'edited_from': question_id,  # Reference to the original question
-            'attachments': kept_attachments
+            'attachments': kept_attachments,
+            'hints': question.get('hints', [])  # Preserve hints from the original question
         }
         
         # Process new file uploads if any
         if 'attachment_file' in request.files:
             files = request.files.getlist('attachment_file')
-            for file in files:
-                if file and file.filename:
+            valid_files = [f for f in files if f and f.filename]
+            
+            # Validate files against limits
+            # First, count existing files that are being kept
+            existing_pdfs = sum(1 for a in kept_attachments if a.get('category', '') == 'pdf')
+            existing_videos = sum(1 for a in kept_attachments if a.get('category', '') == 'video')
+            existing_images = sum(1 for a in kept_attachments if a.get('category', '') == 'image')
+            
+            # Create a combined list for validation
+            all_files = valid_files + [
+                type('obj', (object,), {
+                    'filename': a.get('original_filename', ''),
+                })
+                for a in kept_attachments
+            ]
+            
+            # Validate all files together
+            is_valid, error_message = validate_file_uploads(all_files)
+            if not is_valid:
+                flash(error_message, 'error')
+                return render_template('edit_question.html', form=form, attachment_form=attachment_form, 
+                                      question=question, all_tags=all_tags)
+            
+            # Process new uploads
+            for file in valid_files:
+                if allowed_file(file.filename):
                     attachment = save_attachment(file, new_question_id)
                     new_question['attachments'].append(attachment)
+                else:
+                    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'unknown'
+                    flash(f'File type {ext} is not allowed', 'error')
+                    return render_template('edit_question.html', form=form, attachment_form=attachment_form, 
+                                          question=question, all_tags=all_tags)
         
         questions.append(new_question)
         save_questions(questions)
@@ -393,7 +769,7 @@ def delete_question(question_id):
         save_questions(questions)
         flash('Question deleted successfully!', 'success')
     
-    return redirect(url_for('index'))
+    return redirect(url_for('questionbank'))
 
 @app.route('/download/<question_id>/<attachment_id>')
 def download_attachment(question_id, attachment_id):
@@ -417,7 +793,11 @@ def download_attachment(question_id, attachment_id):
         # For file attachments, serve the file
         attachment_dir = os.path.dirname(os.path.join(app.config['UPLOAD_FOLDER'], attachment['path']))
         filename = os.path.basename(attachment['path'])
-        return send_from_directory(attachment_dir, filename, as_attachment=True, 
+        
+        # Check if the file is a PDF to display it inline
+        is_pdf = attachment.get('file_type') == 'pdf' or filename.lower().endswith('.pdf')
+        
+        return send_from_directory(attachment_dir, filename, as_attachment=not is_pdf, 
                                   download_name=attachment['original_filename'])
 
 @app.route('/remove_attachment/<question_id>/<attachment_id>', methods=['POST'])
@@ -448,3 +828,282 @@ def remove_attachment(question_id, attachment_id):
         flash('Attachment not found!', 'error')
     
     return redirect(url_for('view_question', question_id=question_id)) 
+
+@app.route('/api/tags', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def manage_tags():
+    """API endpoint to manage tags"""
+    tags = load_tags()
+    
+    if request.method == 'GET':
+        # Return all tags
+        return jsonify(tags)
+        
+    elif request.method == 'POST':
+        # Add a new tag
+        data = request.get_json()
+        if not data or 'display_name' not in data:
+            return jsonify({'success': False, 'error': 'No display name provided'}), 400
+            
+        # Create a safe ID from the display name
+        tag_id = data.get('id', data['display_name'].lower().replace(' ', '_'))
+        
+        # Check if the tag already exists
+        if any(tag['id'] == tag_id for tag in tags):
+            return jsonify({'success': False, 'error': 'Tag ID already exists'}), 400
+            
+        # Add the new tag
+        new_tag = {
+            'id': tag_id,
+            'display_name': data['display_name']
+        }
+        tags.append(new_tag)
+        save_tags(tags)
+        
+        return jsonify({'success': True, 'tag': new_tag})
+        
+    elif request.method == 'PUT':
+        # Update a tag's display name
+        data = request.get_json()
+        if not data or 'id' not in data or 'display_name' not in data:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+            
+        # Find the tag to update
+        tag_to_update = next((tag for tag in tags if tag['id'] == data['id']), None)
+        if not tag_to_update:
+            return jsonify({'success': False, 'error': 'Tag not found'}), 404
+            
+        # Update the display name
+        tag_to_update['display_name'] = data['display_name']
+        save_tags(tags)
+        
+        return jsonify({'success': True, 'tag': tag_to_update})
+        
+    elif request.method == 'DELETE':
+        # Delete a tag
+        data = request.get_json()
+        if not data or 'id' not in data:
+            return jsonify({'success': False, 'error': 'No tag ID provided'}), 400
+            
+        # Check if the tag exists
+        tag_to_delete = next((tag for tag in tags if tag['id'] == data['id']), None)
+        if not tag_to_delete:
+            return jsonify({'success': False, 'error': 'Tag not found'}), 404
+            
+        # Remove the tag
+        tags.remove(tag_to_delete)
+        save_tags(tags)
+        
+        # Also need to remove this tag from all questions
+        questions = load_questions(include_deleted=True)
+        updated = False
+        for question in questions:
+            if data['id'] in question.get('tags', []):
+                question['tags'].remove(data['id'])
+                updated = True
+        
+        if updated:
+            save_questions(questions)
+            
+        return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': 'Invalid request method'}), 405
+
+# Make tag helper functions available in templates
+@app.context_processor
+def inject_tag_helpers():
+    return {
+        'get_tag_by_id': get_tag_by_id,
+        'get_tag_display_name': get_tag_display_name
+    } 
+
+def allowed_file(filename):
+    """Check if the file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+def validate_file_uploads(files):
+    """
+    Validate file uploads against the defined limits:
+    - at most 1 pdf
+    - at most 1 webm OR mp4 
+    - at most 1 png, jpg, or jpeg
+    - at most 4 files in total
+    
+    Returns a tuple of (is_valid, error_message)
+    """
+    if len(files) > 4:
+        return False, "Maximum 4 files can be uploaded"
+    
+    # Count file types
+    pdf_count = 0
+    video_count = 0
+    image_count = 0
+    
+    # Total file size
+    total_size = 0
+    
+    for file in files:
+        if not file or not file.filename:
+            continue
+        
+        # Get file extension
+        extension = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if not extension or extension not in app.config['ALLOWED_EXTENSIONS']:
+            return False, f"File type {extension} is not allowed"
+        
+        # Check file size (in bytes)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)  # Reset file pointer
+        
+        total_size += file_size
+        
+        # Count by file type
+        if extension == 'pdf':
+            pdf_count += 1
+        elif extension in ['webm', 'mp4']:
+            video_count += 1
+        elif extension in ['png', 'jpg', 'jpeg']:
+            image_count += 1
+    
+    # Validate counts
+    if pdf_count > 1:
+        return False, "Only 1 PDF file is allowed"
+    
+    if video_count > 1:
+        return False, "Only 1 video file (webm or mp4) is allowed"
+    
+    if image_count > 1:
+        return False, "Only 1 image file (png, jpg, or jpeg) is allowed"
+    
+    # Max total size (100MB)
+    if total_size > app.config['MAX_CONTENT_LENGTH']:
+        return False, f"Total file size must be less than {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)}MB"
+    
+    return True, ""
+
+@app.route('/api/questions/<question_id>/hints', methods=['POST'])
+def add_hint(question_id):
+    """API endpoint to add a hint to a question"""
+    try:
+        data = request.get_json()
+        if not data or 'text' not in data or 'weight' not in data:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+        # Validate hint text - maximum 50 words
+        hint_text = data['text'].strip()
+        word_count = len(hint_text.split())
+        if word_count > 50:
+            return jsonify({'success': False, 'error': f'Hint text must be 50 words or less (currently {word_count} words)'}), 400
+
+        # Validate weight - must be integer between 1 and 10
+        try:
+            weight = int(data['weight'])
+            if weight < 1 or weight > 10:
+                return jsonify({'success': False, 'error': 'Weight must be between 1 and 10'}), 400
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Weight must be an integer'}), 400
+
+        # Load questions and find the target question
+        questions = load_questions(include_deleted=True)
+        question = next((q for q in questions if q.get('id') == question_id), None)
+        
+        if not question:
+            return jsonify({'success': False, 'error': 'Question not found'}), 404
+
+        # Create the new hint object
+        new_hint = {
+            'id': str(uuid.uuid4()),
+            'text': hint_text,
+            'weight': weight
+        }
+
+        # Add the hint to the question
+        if 'hints' not in question:
+            question['hints'] = []
+        question['hints'].append(new_hint)
+        save_questions(questions)
+
+        return jsonify({
+            'success': True,
+            'hint': new_hint
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/questions/<question_id>/hints/<hint_id>', methods=['PUT'])
+def update_hint(question_id, hint_id):
+    """API endpoint to update a hint"""
+    try:
+        data = request.get_json()
+        if not data or ('text' not in data and 'weight' not in data):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+        # Validate hint text if provided - maximum 50 words
+        if 'text' in data:
+            hint_text = data['text'].strip()
+            word_count = len(hint_text.split())
+            if word_count > 50:
+                return jsonify({'success': False, 'error': f'Hint text must be 50 words or less (currently {word_count} words)'}), 400
+
+        # Validate weight if provided - must be integer between 1 and 10
+        if 'weight' in data:
+            try:
+                weight = int(data['weight'])
+                if weight < 1 or weight > 10:
+                    return jsonify({'success': False, 'error': 'Weight must be between 1 and 10'}), 400
+            except ValueError:
+                return jsonify({'success': False, 'error': 'Weight must be an integer'}), 400
+
+        # Load questions and find the target question
+        questions = load_questions(include_deleted=True)
+        question = next((q for q in questions if q.get('id') == question_id), None)
+        
+        if not question:
+            return jsonify({'success': False, 'error': 'Question not found'}), 404
+
+        # Find the hint to update
+        hint = next((h for h in question.get('hints', []) if h.get('id') == hint_id), None)
+        if not hint:
+            return jsonify({'success': False, 'error': 'Hint not found'}), 404
+
+        # Update the hint
+        if 'text' in data:
+            hint['text'] = hint_text
+        if 'weight' in data:
+            hint['weight'] = weight
+
+        save_questions(questions)
+
+        return jsonify({
+            'success': True,
+            'hint': hint
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/questions/<question_id>/hints/<hint_id>', methods=['DELETE'])
+def delete_hint(question_id, hint_id):
+    """API endpoint to delete a hint"""
+    try:
+        # Load questions and find the target question
+        questions = load_questions(include_deleted=True)
+        question = next((q for q in questions if q.get('id') == question_id), None)
+        
+        if not question:
+            return jsonify({'success': False, 'error': 'Question not found'}), 404
+
+        # Find the hint to delete
+        hint = next((h for h in question.get('hints', []) if h.get('id') == hint_id), None)
+        if not hint:
+            return jsonify({'success': False, 'error': 'Hint not found'}), 404
+
+        # Remove the hint
+        question['hints'].remove(hint)
+        save_questions(questions)
+
+        return jsonify({
+            'success': True
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500 

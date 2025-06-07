@@ -4,6 +4,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    background-color: #d2e6ed; /* Light blue background */
 }
 
 .container {
@@ -12,6 +13,7 @@ body {
 
 .footer {
     margin-top: auto;
+    background-color: #ffffff !important; /* White footer background */
 }
 
 
@@ -20,12 +22,21 @@ body {
 .card {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
+    background-color: #ffffff; /* Ensuring cards have white background */
 }
 
 .card:hover {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
+
+/* Form Styles */
+form {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
 
 /* Badge Styles */
 
@@ -38,6 +49,7 @@ body {
 
 #latex-preview {
     transition: all 0.3s ease;
+    background-color: #ffffff;
 }
 
 
@@ -52,4 +64,13 @@ input[type="number"] {
 
 .invalid-feedback {
     display: block;
+}
+
+/* Filter and sort sections */
+.filter-section, .sort-section {
+    background-color: #ffffff;
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
 }

@@ -1,0 +1,30 @@
+[
+    {
+        "id": "math",
+        "display_name": "Maths"
+    },
+    {
+        "id": "algebra",
+        "display_name": "Algebra"
+    },
+    {
+        "id": "calculus",
+        "display_name": "Calculus"
+    },
+    {
+        "id": "geometry",
+        "display_name": "Geometry"
+    },
+    {
+        "id": "physics",
+        "display_name": "Physics"
+    },
+    {
+        "id": "chemistry",
+        "display_name": "Chemistry"
+    },
+    {
+        "id": "biology",
+        "display_name": "Biology"
+    }
+]

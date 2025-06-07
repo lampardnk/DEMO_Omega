@@ -8,6 +8,7 @@
         margin-top: 10px;
         min-height: 50px;
         background-color: #f9f9f9;
+        text-align: center;
     }
     
     .tag-badge {
@@ -57,8 +58,102 @@
     .url-attachments-container {
         margin-top: 15px;
     }
+    
+    .example-code {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        position: relative;
+        margin-bottom: 15px;
+    }
+    
+    .copy-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        cursor: pointer;
+        padding: 3px 8px;
+        font-size: 12px;
+    }
+    
+    .copy-btn:hover {
+        background-color: #e9ecef;
+    }
+    
+    .preview-message {
+        padding: 20px;
+        color: #6c757d;
+    }
+    
+    .compile-error {
+        color: #dc3545;
+        text-align: left;
+        padding: 10px;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+    
+    .preview-spinner {
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border-left-color: #09f;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .page-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    
+    .loader-content {
+        text-align: center;
+        background-color: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .page-loader-spinner {
+        border: 6px solid rgba(0, 0, 0, 0.1);
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        border-left-color: #09f;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px;
+    }
 </style>
 {% endblock %} {% block content %}
+<!-- Page Loader -->
+<div id="page-loader" class="page-loader">
+    <div class="loader-content">
+        <div class="page-loader-spinner"></div>
+        <div>Loading question data...</div>
+    </div>
+</div>
+
 <div class="row mb-4">
     <div class="col-md-12">
         <a href="{{ url_for('view_question', question_id=question.id) }}" class="btn btn-outline-secondary mb-3">&larr; Back to Question</a>
@@ -78,6 +173,14 @@
                     {{ form.hidden_tag() }}
 
                     <div class="mb-3">
+                        <label for="name" class="form-label">{{ form.name.label }}</label> {{ form.name(class="form-control", id="name", placeholder="Enter a descriptive name for the question...") }} {% if form.name.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.name.errors %} {{ error }} {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
                         <label for="content" class="form-label">{{ form.content.label }}</label> {{ form.content(class="form-control", id="latex-input", rows=5, placeholder="Enter LaTeX content...") }} {% if form.content.errors %}
                         <div class="invalid-feedback d-block">
                             {% for error in form.content.errors %} {{ error }} {% endfor %}
@@ -86,9 +189,23 @@
                     </div>
 
                     <div class="mb-3">
+                        <label for="answer" class="form-label">{{ form.answer.label }}</label>
+                        {{ form.answer(class="form-control", id="answer", rows=3, placeholder="Enter the exact textual answer...") }}
+                        {% if form.answer.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.answer.errors %} {{ error }} {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">Preview</label>
+                        <button type="button" id="compile-button" class="btn btn-primary btn-sm">Compile Preview</button>
                         <div id="latex-preview">
-                            <div id="math-preview"></div>
+                            <div id="preview-placeholder" class="preview-message">Press compile preview to preview SVG</div>
+                            <div id="preview-spinner" class="preview-spinner" style="display: none;"></div>
+                            <div id="math-preview" style="display: none;"></div>
+                            <div id="compile-error" class="compile-error" style="display: none;"></div>
                         </div>
                     </div>
 
@@ -100,25 +217,84 @@
                         {% endif %}
                     </div>
 
-                    <div class="mb-3">
-                        <label for="tags" class="form-label">New Tags (comma-separated)</label> {{ form.tags(class="form-control", id="tags", placeholder="math, algebra, calculus, etc.") }} {% if form.tags.errors %}
-                        <div class="invalid-feedback d-block">
-                            {% for error in form.tags.errors %} {{ error }} {% endfor %}
-                        </div>
-                        {% endif %}
-                        <div class="form-text">Enter new tags not in the list below</div>
-                    </div>
-
                     <div class="mb-4">
-                        <label class="form-label">Select Existing Tags</label>
+                        <label class="form-label">Select Tags</label>
                         <div class="tag-selection-area">
-                            {% if all_tags %} {% for tag in all_tags %}
-                            <span class="badge tag-badge {% if tag in question.tags %}selected-tag{% endif %}" data-tag="{{ tag }}" onclick="toggleTag(this)">{{ tag }}</span> {% endfor %} {% else %}
-                            <p class="text-muted">No existing tags yet. Create some with the field above.</p>
+                            {% if all_tags %} 
+                                {% for tag in all_tags %}
+                                <span class="badge tag-badge {% if tag.id in question.tags %}selected-tag{% endif %}" data-tag="{{ tag.id }}" onclick="toggleTag(this)">{{ tag.display_name }}</span> 
+                                {% endfor %} 
+                            {% else %}
+                                <p class="text-muted">No tags available. Please add tags in the Question Bank page first.</p>
                             {% endif %}
                         </div>
                         <div id="selected-tags-container">
                             <!-- Hidden inputs for selected tags will be added here by JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Manage Hints</label>
+                        <div class="attachments-area">
+                            <div id="hints-container">
+                                <!-- Existing hints will be loaded here by JavaScript -->
+                                {% if question.hints %}
+                                    {% for hint in question.hints %}
+                                    <div class="hint-item d-flex justify-content-between align-items-start mb-3" data-hint-id="{{ hint.id }}">
+                                        <div class="flex-grow-1 me-2">
+                                            <div class="d-flex justify-content-between">
+                                                <label class="form-label mb-1">Hint #{{ loop.index }}</label>
+                                                <span class="badge bg-{% if hint.weight >= 8 %}danger{% elif hint.weight >= 5 %}warning{% else %}info{% endif %}">
+                                                    Weight: {{ hint.weight }}/10
+                                                </span>
+                                            </div>
+                                            <textarea class="form-control hint-text mb-2" rows="2" maxlength="500" data-hint-id="{{ hint.id }}">{{ hint.text }}</textarea>
+                                            <div class="d-flex align-items-center">
+                                                <label class="form-label me-2 mb-0">Weight:</label>
+                                                <input type="number" class="form-control form-control-sm hint-weight" min="1" max="10" value="{{ hint.weight }}" style="width: 70px;" data-hint-id="{{ hint.id }}">
+                                                <button type="button" class="btn btn-sm btn-outline-danger ms-auto delete-hint-btn" data-hint-id="{{ hint.id }}">Delete</button>
+                                            </div>
+                                            <div class="word-count text-end small text-muted mt-1">
+                                                <span class="current-words">{{ hint.text.split()|length }}</span>/50 words
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p id="no-hints-message" class="text-muted">No hints have been added yet.</p>
+                                {% endif %}
+                            </div>
+                            
+                            <button type="button" class="btn btn-outline-primary mt-3" id="add-hint-btn">Add New Hint</button>
+                            
+                            <!-- New hint form template (hidden) -->
+                            <div class="mt-3" id="new-hint-form" style="display: none;">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0">New Hint</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Hint Text (max 50 words)</label>
+                                            <textarea class="form-control" id="new-hint-text" rows="2" maxlength="500"></textarea>
+                                            <div class="word-count text-end small text-muted mt-1">
+                                                <span id="new-hint-word-count">0</span>/50 words
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Weight (1-10)</label>
+                                            <input type="number" class="form-control" id="new-hint-weight" min="1" max="10" value="5">
+                                            <div class="form-text">
+                                                1 = weak hint, 10 = critical hint that likely answers the question
+                                            </div>
+                                        </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-secondary me-2" id="cancel-hint-btn">Cancel</button>
+                                            <button type="button" class="btn btn-primary" id="save-hint-btn">Save Hint</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -150,8 +326,17 @@
                         <label class="form-label">Add New Attachments</label>
                         <div class="attachments-area">
                             <div class="mb-3">
-                                <label for="attachment_file" class="form-label">Upload Files</label> {{ attachment_form.attachment_file(class="form-control", id="attachment_file", multiple=True) }}
-                                <div class="form-text">Select one or more files to upload (max 16MB total)</div>
+                                <label for="attachment_file" class="form-label">Upload Files</label>
+                                <input type="file" name="attachment_file" multiple class="form-control" id="attachment_file" accept=".pdf,.png,.jpg,.jpeg,.webm,.mp4,.docx,.xlsx,.pptx">
+                                <div class="form-text">
+                                    <p>Select up to 4 files to upload (max 100MB total):</p>
+                                    <ul class="small text-muted">
+                                        <li>At most 1 PDF file</li>
+                                        <li>At most 1 video file (webm or mp4)</li>
+                                        <li>At most 1 image file (png, jpg, or jpeg)</li>
+                                        <li>Any number of document files (docx, xlsx, pptx) up to the 4-file limit</li>
+                                    </ul>
+                                </div>
                             </div>
 
                             <div class="mb-3">
@@ -176,48 +361,248 @@
     </div>
 
     <div class="col-md-4">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5>LaTeX Help</h5>
-            </div>
-            <div class="card-body">
-                <h6>Basic Syntax</h6>
-                <ul>
-                    <li>Fractions: <code>\frac{numerator}{denominator}</code></li>
-                    <li>Square root: <code>\sqrt{expression}</code></li>
-                    <li>Exponents: <code>x^{exponent}</code></li>
-                    <li>Subscripts: <code>x_{subscript}</code></li>
-                    <li>Greek letters: <code>\alpha, \beta, \gamma, \pi</code></li>
-                </ul>
+        <div class="accordion" id="examplesAccordion">
+            <!-- LaTeX Examples -->
+            <div class="accordion-item mb-2">
+                <h2 class="accordion-header" id="headingLatexExamples">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLatexExamples" aria-expanded="false" aria-controls="collapseLatexExamples">
+                        LaTeX Examples
+                    </button>
+                </h2>
+                <div id="collapseLatexExamples" class="accordion-collapse collapse" aria-labelledby="headingLatexExamples" data-bs-parent="#examplesAccordion">
+                    <div class="accordion-body">
+                        <h6>Mathematical Formula</h6>
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{amsmath}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{questions}
 
-                <h6>Examples</h6>
-                <ul>
-                    <li>Quadratic formula: <code>x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}</code></li>
-                    <li>Integration: <code>\int_{a}^{b} f(x) \, dx</code></li>
-                    <li>Summation: <code>\sum_{i=1}^{n} i^2</code></li>
-                </ul>
-            </div>
-        </div>
+\begin{document}
 
-        <div class="card">
-            <div class="card-header">
-                <h5>TikZ & CircuiTikZ</h5>
+\begin{questions}
+\question
+$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$
+\end{questions}
+
+\end{document}</pre>
+                        </div>
+
+                        <h6>Multiple Choice Question</h6>
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{questions}
+
+\begin{document}
+
+\begin{questions}
+\question
+Which of the following is the solution to $x^2 + 6x + 9 = 0$?
+
+\begin{enumerate}[label=\Alph*.]
+    \item $x = 3$
+    \item $x = -3$
+    \item $x = \pm 3$
+    \item $x = -3$ (with multiplicity 2)
+\end{enumerate}
+
+\textbf{Answer:} D
+\end{questions}
+
+\end{document}</pre>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <h6>TikZ Example</h6>
-                <pre><code>\begin{tikzpicture}
+            
+            <!-- TikZ & CircuiTikZ -->
+            <div class="accordion-item mb-2">
+                <h2 class="accordion-header" id="headingTikZ">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTikZ" aria-expanded="false" aria-controls="collapseTikZ">
+                        TikZ & CircuiTikZ Examples
+                    </button>
+                </h2>
+                <div id="collapseTikZ" class="accordion-collapse collapse" aria-labelledby="headingTikZ" data-bs-parent="#examplesAccordion">
+                    <div class="accordion-body">
+                        <h6>TikZ Example</h6>
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{tikz}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{tikzpicture}
+
+\begin{document}
+
+\begin{tikzpicture}
 \draw (0,0) circle (1cm);
 \fill (0,0) circle (2pt);
 \draw[->] (0,0) -- (1,0);
-\end{tikzpicture}</code></pre>
+\end{tikzpicture}
 
-                <h6>CircuiTikZ Example</h6>
-                <pre><code>\begin{circuitikz}
+\end{document}</pre>
+                        </div>
+
+                        <h6>CircuiTikZ Example</h6>
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{circuitikz}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{circuitikz}
+
+\begin{document}
+
+\begin{circuitikz}
 \draw (0,0) to[R=$R_1$] (2,0)
       to[V=$V_1$] (2,2)
       to[R=$R_2$] (0,2)
       to[C=$C_1$] (0,0);
-\end{circuitikz}</code></pre>
+\end{circuitikz}
+
+\end{document}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Physics Example -->
+            <div class="accordion-item mb-2">
+                <h2 class="accordion-header" id="headingPhysics">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePhysics" aria-expanded="false" aria-controls="collapsePhysics">
+                        Physics MCQ Example
+                    </button>
+                </h2>
+                <div id="collapsePhysics" class="accordion-collapse collapse" aria-labelledby="headingPhysics" data-bs-parent="#examplesAccordion">
+                    <div class="accordion-body">
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{questions}
+
+\begin{document}
+
+\begin{questions}
+\question
+A light ray travels from air into a glass block as shown. Which of the following best describes the behavior of the light as it enters the glass?
+
+\begin{center}
+\begin{tikzpicture}[scale=1.2]
+    \node at (2, 2.3) {Air};
+    \node at (2, 0.3) {Glass};
+    \draw[fill=blue!10] (0,0) rectangle (4,1.5);
+    \draw[dashed] (2,2.5) -- (2,-0.5);
+    \draw[->, thick] (0.5,2) -- (2,1);
+    \draw[->, thick] (2,1) -- (3.2,0.4);
+    \draw (2,1) +(50:0.5) arc[start angle=50,end angle=90,radius=0.5];
+    \node at (2.4,1.4) {\small $\theta_1$};
+    \draw (2,1) +(270:0.5) arc[start angle=270,end angle=305,radius=0.5];
+    \node at (2.3,0.5) {\small $\theta_2$};
+    \node at (1.2,2.1) {Incident ray};
+    \node at (3.5,0.3) {Refracted ray};
+\end{tikzpicture}
+\end{center}
+
+\begin{enumerate}[label=\Alph*.]
+    \item The light speeds up and bends away from the normal.  
+    \item The light slows down and bends toward the normal.  
+    \item The light slows down and bends away from the normal.  
+    \item The light continues in a straight line.
+\end{enumerate}
+
+\textbf{Answer:} B
+\end{questions}
+
+\end{document}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Math Short Answer with Parts/Subparts -->
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingMathParts">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMathParts" aria-expanded="false" aria-controls="collapseMathParts">
+                        Math Short Answer with Parts/Subparts
+                    </button>
+                </h2>
+                <div id="collapseMathParts" class="accordion-collapse collapse" aria-labelledby="headingMathParts" data-bs-parent="#examplesAccordion">
+                    <div class="accordion-body">
+                        <div class="example-code">
+                            <button class="copy-btn" onclick="copyExample(this)">Copy</button>
+<pre>\documentclass{exam}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{questions}
+
+\begin{document}
+
+\begin{questions}
+\question[10] For the function $f(x) = 3x^2 - 4x + 2$, answer the following:
+\begin{parts}
+    \part[3] Find all critical points of the function.
+    \begin{solution}
+        To find critical points, we set $f'(x) = 0$:
+        \begin{align}
+            f'(x) &= 6x - 4\\
+            6x - 4 &= 0\\
+            6x &= 4\\
+            x &= \frac{2}{3}
+        \end{align}
+        
+        So there is one critical point at $x = \frac{2}{3}$.
+    \end{solution}
+    
+    \part[3] Determine whether each critical point is a local maximum, local minimum, or neither.
+    \begin{solution}
+        We can use the second derivative test:
+        \begin{align}
+            f''(x) = 6
+        \end{align}
+        
+        Since $f''(\frac{2}{3}) = 6 > 0$, the critical point is a local minimum.
+    \end{solution}
+    
+    \part[4] Calculate the following:
+    \begin{subparts}
+        \subpart[2] The value of the function at the critical point.
+        \begin{solution}
+            \begin{align}
+                f\left(\frac{2}{3}\right) &= 3\left(\frac{2}{3}\right)^2 - 4\left(\frac{2}{3}\right) + 2\\
+                &= 3 \cdot \frac{4}{9} - 4 \cdot \frac{2}{3} + 2\\
+                &= \frac{4}{3} - \frac{8}{3} + 2\\
+                &= \frac{4 - 8 + 6}{3}\\
+                &= \frac{2}{3}
+            \end{align}
+            
+            The value of the function at the critical point is $f\left(\frac{2}{3}\right) = \frac{2}{3}$.
+        \end{solution}
+        
+        \subpart[2] The range of the function.
+        \begin{solution}
+            Since $f(x) = 3x^2 - 4x + 2$ has a leading coefficient of 3 (positive), the parabola opens upward.
+            The minimum value is $f\left(\frac{2}{3}\right) = \frac{2}{3}$.
+            Therefore, the range of $f(x)$ is $\left[\frac{2}{3}, \infty\right)$.
+        \end{solution}
+    \end{subparts}
+\end{parts}
+\end{questions}
+
+\end{document}</pre>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -225,30 +610,61 @@
 {% endblock %} {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Hide the page loader when DOM is loaded
+        document.getElementById('page-loader').style.display = 'none';
+        
         const latexInput = document.getElementById('latex-input');
         const mathPreview = document.getElementById('math-preview');
+        const previewPlaceholder = document.getElementById('preview-placeholder');
+        const compileButton = document.getElementById('compile-button');
+        const compileError = document.getElementById('compile-error');
+        const previewSpinner = document.getElementById('preview-spinner');
 
-        function updatePreview() {
+        compileButton.addEventListener('click', function() {
             const latex = latexInput.value;
-
-            // For TikZ, CircuiTikZ or scope environments, don't render in preview
-            if (latex.includes('\\begin{tikzpicture}') ||
-                latex.includes('\\begin{circuitikz}') ||
-                latex.includes('\\begin{scope}')) {
-                mathPreview.innerHTML = '<div class="alert alert-info">TikZ/CircuiTikZ diagram detected. Preview not available. Will be rendered when saved.</div>';
+            if (!latex.trim()) {
+                previewPlaceholder.style.display = 'block';
+                mathPreview.style.display = 'none';
+                compileError.style.display = 'none';
+                previewSpinner.style.display = 'none';
                 return;
             }
 
-            mathPreview.innerHTML = '$$' + latex + '$$';
-            MathJax.typesetPromise([mathPreview]).catch(function(err) {
-                console.log('Error typesetting math:', err);
+            // Show spinner, hide other elements
+            previewPlaceholder.style.display = 'none';
+            mathPreview.style.display = 'none';
+            compileError.style.display = 'none';
+            previewSpinner.style.display = 'block';
+            
+            // Send to server to compile - for ALL LaTeX content
+            fetch('/api/compile-latex', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({latex: latex})
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide spinner
+                previewSpinner.style.display = 'none';
+                
+                if (data.success) {
+                    mathPreview.innerHTML = '<img src="' + data.svg + '" class="img-fluid" alt="LaTeX Preview">';
+                    mathPreview.style.display = 'block';
+                } else {
+                    compileError.textContent = 'Compilation Error: ' + data.error;
+                    compileError.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                // Hide spinner
+                previewSpinner.style.display = 'none';
+                
+                compileError.textContent = 'Server Error: ' + error.message;
+                compileError.style.display = 'block';
             });
-        }
-
-        latexInput.addEventListener('input', updatePreview);
-
-        // Initial preview
-        updatePreview();
+        });
 
         // Initialize selected tags
         updateSelectedTags();
@@ -290,5 +706,318 @@
         const fieldDiv = button.parentNode;
         fieldDiv.parentNode.removeChild(fieldDiv);
     }
+    
+    // Copy example code
+    function copyExample(button) {
+        const codeBlock = button.nextElementSibling;
+        const textToCopy = codeBlock.textContent;
+        
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            // Change button text temporarily
+            const originalText = button.textContent;
+            button.textContent = "Copied!";
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 1500);
+        }).catch(err => {
+            console.error('Could not copy text: ', err);
+        });
+    }
+
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Hide the loader once the page is fully loaded
+        document.getElementById('page-loader').style.display = 'none';
+        
+        // Initialize tag selection
+        updateTagInputs();
+        
+        // Initialize URL attachment fields
+        addUrlField();
+        
+        // Initialize the preview
+        document.getElementById('compile-button').click();
+    });
+    
+    // On form submit, ensure we have at least one tag selected
+    document.getElementById('question-form').addEventListener('submit', function(e) {
+        const selectedTags = document.querySelectorAll('.selected-tag');
+        if (selectedTags.length === 0) {
+            e.preventDefault();
+            alert('Please select at least one tag for the question.');
+        }
+    });
+    
+    // Add word counter for new hint text
+    document.getElementById('new-hint-text').addEventListener('input', function() {
+        const wordCount = this.value.trim().split(/\s+/).filter(Boolean).length;
+        document.getElementById('new-hint-word-count').textContent = wordCount;
+        
+        // Highlight in red if over 50 words
+        if (wordCount > 50) {
+            document.getElementById('new-hint-word-count').classList.add('text-danger');
+            document.getElementById('new-hint-word-count').classList.add('fw-bold');
+        } else {
+            document.getElementById('new-hint-word-count').classList.remove('text-danger');
+            document.getElementById('new-hint-word-count').classList.remove('fw-bold');
+        }
+    });
+    
+    // Word counters for existing hints
+    document.querySelectorAll('.hint-text').forEach(textarea => {
+        textarea.addEventListener('input', function() {
+            const wordCount = this.value.trim().split(/\s+/).filter(Boolean).length;
+            const countDisplay = this.closest('.hint-item').querySelector('.current-words');
+            countDisplay.textContent = wordCount;
+            
+            // Highlight in red if over 50 words
+            if (wordCount > 50) {
+                countDisplay.classList.add('text-danger');
+                countDisplay.classList.add('fw-bold');
+            } else {
+                countDisplay.classList.remove('text-danger');
+                countDisplay.classList.remove('fw-bold');
+            }
+        });
+    });
+    
+    // Show the new hint form
+    document.getElementById('add-hint-btn').addEventListener('click', function() {
+        document.getElementById('add-hint-btn').style.display = 'none';
+        document.getElementById('new-hint-form').style.display = 'block';
+    });
+    
+    // Cancel adding a new hint
+    document.getElementById('cancel-hint-btn').addEventListener('click', function() {
+        document.getElementById('new-hint-form').style.display = 'none';
+        document.getElementById('add-hint-btn').style.display = 'block';
+        document.getElementById('new-hint-text').value = '';
+        document.getElementById('new-hint-weight').value = '5';
+        document.getElementById('new-hint-word-count').textContent = '0';
+    });
+    
+    // Save a new hint
+    document.getElementById('save-hint-btn').addEventListener('click', function() {
+        const hintText = document.getElementById('new-hint-text').value.trim();
+        const hintWeight = document.getElementById('new-hint-weight').value;
+        const wordCount = hintText.split(/\s+/).filter(Boolean).length;
+        
+        // Validate input
+        if (!hintText) {
+            alert('Please enter hint text.');
+            return;
+        }
+        
+        if (wordCount > 50) {
+            alert('Hint text must be 50 words or less.');
+            return;
+        }
+        
+        if (hintWeight < 1 || hintWeight > 10) {
+            alert('Weight must be between 1 and 10.');
+            return;
+        }
+        
+        // Send request to API to add the hint
+        fetch(`/api/questions/{{ question.id }}/hints`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                text: hintText,
+                weight: parseInt(hintWeight)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Hide the "no hints" message if it exists
+                const noHintsMessage = document.getElementById('no-hints-message');
+                if (noHintsMessage) {
+                    noHintsMessage.style.display = 'none';
+                }
+                
+                // Add the new hint to the UI
+                const hintsContainer = document.getElementById('hints-container');
+                const hintCount = hintsContainer.querySelectorAll('.hint-item').length + 1;
+                
+                const weightClass = hintWeight >= 8 ? 'danger' : (hintWeight >= 5 ? 'warning' : 'info');
+                
+                const hintHtml = `
+                <div class="hint-item d-flex justify-content-between align-items-start mb-3" data-hint-id="${data.hint.id}">
+                    <div class="flex-grow-1 me-2">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label mb-1">Hint #${hintCount}</label>
+                            <span class="badge bg-${weightClass}">
+                                Weight: ${data.hint.weight}/10
+                            </span>
+                        </div>
+                        <textarea class="form-control hint-text mb-2" rows="2" maxlength="500" data-hint-id="${data.hint.id}">${data.hint.text}</textarea>
+                        <div class="d-flex align-items-center">
+                            <label class="form-label me-2 mb-0">Weight:</label>
+                            <input type="number" class="form-control form-control-sm hint-weight" min="1" max="10" value="${data.hint.weight}" style="width: 70px;" data-hint-id="${data.hint.id}">
+                            <button type="button" class="btn btn-sm btn-outline-danger ms-auto delete-hint-btn" data-hint-id="${data.hint.id}">Delete</button>
+                        </div>
+                        <div class="word-count text-end small text-muted mt-1">
+                            <span class="current-words">${wordCount}</span>/50 words
+                        </div>
+                    </div>
+                </div>
+                `;
+                
+                hintsContainer.insertAdjacentHTML('beforeend', hintHtml);
+                
+                // Add event listeners to the new hint
+                const newHintItem = hintsContainer.lastElementChild;
+                
+                // Word counter
+                const textarea = newHintItem.querySelector('.hint-text');
+                textarea.addEventListener('input', function() {
+                    const wordCount = this.value.trim().split(/\s+/).filter(Boolean).length;
+                    const countDisplay = this.closest('.hint-item').querySelector('.current-words');
+                    countDisplay.textContent = wordCount;
+                    
+                    if (wordCount > 50) {
+                        countDisplay.classList.add('text-danger');
+                        countDisplay.classList.add('fw-bold');
+                    } else {
+                        countDisplay.classList.remove('text-danger');
+                        countDisplay.classList.remove('fw-bold');
+                    }
+                });
+                
+                // Delete button
+                const deleteBtn = newHintItem.querySelector('.delete-hint-btn');
+                deleteBtn.addEventListener('click', deleteHint);
+                
+                // Update button
+                const weightInput = newHintItem.querySelector('.hint-weight');
+                weightInput.addEventListener('change', updateHint);
+                textarea.addEventListener('blur', updateHint);
+                
+                // Reset the form
+                document.getElementById('cancel-hint-btn').click();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to add hint'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error adding hint: ' + error.message);
+        });
+    });
+    
+    // Delete a hint
+    function deleteHint() {
+        const hintId = this.getAttribute('data-hint-id');
+        const hintItem = this.closest('.hint-item');
+        
+        if (confirm('Are you sure you want to delete this hint?')) {
+            fetch(`/api/questions/{{ question.id }}/hints/${hintId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Remove the hint from the UI
+                    hintItem.remove();
+                    
+                    // Renumber the remaining hints
+                    const hintItems = document.querySelectorAll('.hint-item');
+                    hintItems.forEach((item, index) => {
+                        item.querySelector('label').textContent = `Hint #${index + 1}`;
+                    });
+                    
+                    // Show the "no hints" message if there are no more hints
+                    if (hintItems.length === 0) {
+                        const noHintsMessage = document.getElementById('no-hints-message');
+                        if (noHintsMessage) {
+                            noHintsMessage.style.display = 'block';
+                        } else {
+                            const hintsContainer = document.getElementById('hints-container');
+                            hintsContainer.innerHTML = '<p id="no-hints-message" class="text-muted">No hints have been added yet.</p>';
+                        }
+                    }
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to delete hint'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error deleting hint: ' + error.message);
+            });
+        }
+    }
+    
+    // Update a hint
+    function updateHint() {
+        const hintId = this.getAttribute('data-hint-id');
+        const hintItem = this.closest('.hint-item');
+        const textarea = hintItem.querySelector('.hint-text');
+        const weightInput = hintItem.querySelector('.hint-weight');
+        
+        const hintText = textarea.value.trim();
+        const hintWeight = parseInt(weightInput.value);
+        const wordCount = hintText.split(/\s+/).filter(Boolean).length;
+        
+        // Validate input
+        if (!hintText) {
+            alert('Hint text cannot be empty.');
+            return;
+        }
+        
+        if (wordCount > 50) {
+            alert('Hint text must be 50 words or less.');
+            return;
+        }
+        
+        if (hintWeight < 1 || hintWeight > 10) {
+            alert('Weight must be between 1 and 10.');
+            weightInput.value = Math.max(1, Math.min(10, hintWeight));
+            return;
+        }
+        
+        // Send request to API to update the hint
+        fetch(`/api/questions/{{ question.id }}/hints/${hintId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                text: hintText,
+                weight: hintWeight
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the weight badge
+                const weightClass = hintWeight >= 8 ? 'danger' : (hintWeight >= 5 ? 'warning' : 'info');
+                const weightBadge = hintItem.querySelector('.badge');
+                weightBadge.className = `badge bg-${weightClass}`;
+                weightBadge.textContent = `Weight: ${hintWeight}/10`;
+            } else {
+                alert('Error: ' + (data.error || 'Failed to update hint'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error updating hint: ' + error.message);
+        });
+    }
+    
+    // Add event listeners to existing hint items
+    document.querySelectorAll('.delete-hint-btn').forEach(btn => {
+        btn.addEventListener('click', deleteHint);
+    });
+    
+    document.querySelectorAll('.hint-weight').forEach(input => {
+        input.addEventListener('change', updateHint);
+    });
+    
+    document.querySelectorAll('.hint-text').forEach(textarea => {
+        textarea.addEventListener('blur', updateHint);
+    });
 </script>
 {% endblock %}

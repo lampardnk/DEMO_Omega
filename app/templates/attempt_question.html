@@ -1,0 +1,552 @@
+{% extends "base.html" %} 
+{% block title %}Question Bank - Attempt Question{% endblock %} 
+
+{% block head %}
+<style>
+    .question-content {
+        margin-bottom: 30px;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+    }
+    
+    .answer-section {
+        margin-bottom: 30px;
+    }
+    
+    .media-section {
+        margin-top: 20px;
+    }
+    
+    .media-nav {
+        margin-bottom: 15px;
+    }
+    
+    .media-container {
+        min-height: 300px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+        background-color: #f9f9f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .pdf-viewer {
+        width: 100%;
+        height: 500px;
+    }
+    
+    .image-viewer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .image-container {
+        overflow: hidden;
+        max-width: 100%;
+        max-height: 500px;
+        margin-bottom: 10px;
+    }
+    
+    .image-container img {
+        max-width: 100%;
+        transition: transform 0.3s ease;
+    }
+    
+    .zoom-controls {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    
+    .video-container {
+        width: 100%;
+    }
+    
+    .video-container video {
+        width: 100%;
+        max-height: 500px;
+    }
+    
+    .attachments-list {
+        list-style: none;
+        padding: 0;
+    }
+    
+    .attachment-item {
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: white;
+    }
+    
+    .word-count {
+        color: #6c757d;
+        text-align: right;
+        font-size: 0.9rem;
+        margin-top: 5px;
+    }
+    
+    .hints-section {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+    }
+    
+    .hint-card {
+        height: 100%;
+        transition: all 0.3s ease;
+    }
+    
+    .hint-card .card-header {
+        background-color: rgba(0,0,0,0.03);
+    }
+    
+    .hint-reveal-btn {
+        min-width: 120px;
+    }
+    
+    .hint-content {
+        padding: 10px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary mb-3">&larr; Back to Questions</a>
+        <h1>Attempt Question</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <!-- Question Display -->
+        <div class="question-content">
+            {% if question.name %}
+            <h4 class="mb-3">{{ question.name }}</h4>
+            {% endif %}
+            
+            <div class="d-flex justify-content-between mb-3">
+                <div>
+                    <span class="badge bg-primary me-2">Rating: {{ question.rating }}</span> 
+                    {% for tag_id in question.tags %}
+                        {% set tag = get_tag_by_id(tag_id) %}
+                        {% if tag %}
+                            <span class="badge bg-secondary">{{ tag.display_name }}</span> 
+                        {% else %}
+                            <span class="badge bg-secondary">{{ tag_id }}</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <img src="{{ question.svg }}" alt="LaTeX formula" class="img-fluid w-100">
+            </div>
+            
+            <!-- Hints Section -->
+            {% if question.hints and question.hints|length > 0 %}
+            <div class="hints-section mt-4">
+                <h5>Available Hints</h5>
+                <div class="row">
+                    {% for hint in question.hints %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card h-100" data-hint-id="{{ hint.id }}" data-hint-position="{{ loop.index }}">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Hint #{{ loop.index }}</span>
+                                <span class="badge bg-{% if hint.weight >= 8 %}danger{% elif hint.weight >= 5 %}warning{% else %}info{% endif %}">
+                                    Weight: {{ hint.weight }}/10
+                                </span>
+                            </div>
+                            <div class="card-body text-center">
+                                <div class="hint-content" id="hint-content-{{ hint.id }}" style="display: none;">
+                                    <p>{{ hint.text }}</p>
+                                </div>
+                                <button class="btn btn-outline-primary hint-reveal-btn" 
+                                        data-hint-id="{{ hint.id }}" 
+                                        onclick="revealHint('{{ hint.id }}')">
+                                    Reveal Hint
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Answer Section -->
+        <div class="answer-section">
+            <h4>Your Answer</h4>
+            <form method="POST" action="{{ url_for('attempt_question', question_id=question.id) }}" id="answer-form">
+                <div class="mb-3">
+                    <textarea name="answer" class="form-control" rows="5" placeholder="Type your answer here..." maxlength="2000"></textarea>
+                </div>
+                <!-- Hidden inputs for used hints will be added dynamically via JavaScript -->
+                <div id="used-hints-container"></div>
+                <button type="submit" class="btn btn-primary">Submit Answer</button>
+            </form>
+        </div>
+        
+        <!-- Submissions Section -->
+        <div class="submissions-section mt-5">
+            <h4>Your Submissions</h4>
+            {% if submissions %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Submission ID</th>
+                            <th>Time</th>
+                            <th>Outcome</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for submission in submissions %}
+                            <tr class="submission-row" data-submission-id="{{ submission.id }}">
+                                <td>{{ submission.id[:8] }}...</td>
+                                <td>{{ submission.timestamp }}</td>
+                                <td>
+                                    <span class="badge {% if submission.outcome == 'Correct' %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ submission.outcome }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary btn-view-detail" 
+                                            data-bs-toggle="collapse" 
+                                            data-bs-target="#submission-detail-{{ submission.id }}">
+                                        View Detail
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr class="collapse" id="submission-detail-{{ submission.id }}">
+                                <td colspan="4">
+                                    <div class="submission-detail-view p-3">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h5>Your Answer</h5>
+                                                <pre>{{ submission.user_answer }}</pre>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h5>System Verdict</h5>
+                                                <p>{{ submission.verdict }}</p>
+                                                
+                                                {% if submission.get('used_hints', []) %}
+                                                <h5 class="mt-3">Hints Used</h5>
+                                                <ul class="list-group">
+                                                    {# New logic for submissions with hint_data #}
+                                                    {% set hint_data = submission.get('hint_data', []) %}
+                                                    {% if hint_data %}
+                                                        {% for item in hint_data|sort(attribute='position') %}
+                                                            {% set hint = (question.hints|selectattr('id', 'equalto', item.id)|first) %}
+                                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                                {% if hint %}
+                                                                    <div>
+                                                                        <strong>Hint #{{ item.position }}:</strong> {{ hint.text }}
+                                                                    </div>
+                                                                    <span class="badge bg-{% if hint.weight >= 8 %}danger{% elif hint.weight >= 5 %}warning{% else %}info{% endif %}">
+                                                                        Weight: {{ hint.weight }}/10
+                                                                    </span>
+                                                                {% else %}
+                                                                    <div>Hint #{{ item.position if item.position > 0 else '?' }} (ID: {{ item.id }})</div>
+                                                                    <span class="badge bg-secondary">Not available</span>
+                                                                {% endif %}
+                                                            </li>
+                                                        {% endfor %}
+                                                    {# Fallback for older submissions without hint_data #}
+                                                    {% else %}
+                                                        {% for hint_id in submission.get('used_hints', []) %}
+                                                            {% set hint = (question.hints|selectattr('id', 'equalto', hint_id)|first) %}
+                                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                                {% if hint %}
+                                                                    <div>
+                                                                        <strong>Hint #{{ loop.index }}:</strong> {{ hint.text }}
+                                                                    </div>
+                                                                    <span class="badge bg-{% if hint.weight >= 8 %}danger{% elif hint.weight >= 5 %}warning{% else %}info{% endif %}">
+                                                                        Weight: {{ hint.weight }}/10
+                                                                    </span>
+                                                                {% else %}
+                                                                    <div>Hint #{{ loop.index }} (ID: {{ hint_id }})</div>
+                                                                    <span class="badge bg-secondary">Not available</span>
+                                                                {% endif %}
+                                                            </li>
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                </ul>
+                                                {% else %}
+                                                <p class="mt-3"><em>No hints were used for this submission.</em></p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p>You have not made any submissions for this question yet.</p>
+            {% endif %}
+        </div>
+        
+        <!-- Media Section -->
+        <div class="media-section">
+            <div class="media-nav">
+                <div class="btn-group" role="group" aria-label="Media Navigation">
+                    <!-- Check attachments -->
+                    {% set has_attachments = question.attachments and question.attachments|length > 0 %}
+                    {% set media = namespace(pdf=none, video=none, image=none) %}
+                    {% for attachment in question.attachments %}
+                        {% if not media.pdf and (attachment.get('category', '') == 'pdf' or attachment.get('file_type', '') == 'pdf') %}
+                            {% set media.pdf = attachment %}
+                        {% elif not media.video and (attachment.get('category', '') == 'video' or (attachment.get('file_type', '') and attachment.get('file_type') in ['webm', 'mp4'])) %}
+                            {% set media.video = attachment %}
+                        {% elif not media.image and (attachment.get('category', '') == 'image' or (attachment.get('file_type', '') and attachment.get('file_type') in ['png', 'jpg', 'jpeg'])) %}
+                            {% set media.image = attachment %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <button id="btn-attachments" class="btn btn-outline-secondary{% if not has_attachments %} disabled{% endif %}" onclick="showMedia('attachments')">Attachments</button>
+                    
+                    <button id="btn-pdf" class="btn btn-outline-secondary{% if not media.pdf %}disabled{% endif %}" onclick="showMedia('pdf')">PDF</button>
+                    
+                    <button id="btn-video" class="btn btn-outline-secondary{% if not media.video %}disabled{% endif %}" onclick="showMedia('video')">Video</button>
+                    
+                    <button id="btn-image" class="btn btn-outline-secondary{% if not media.image %}disabled{% endif %}" onclick="showMedia('image')">Image</button>
+                </div>
+            </div>
+            
+            <div class="media-container">
+                <!-- Attachments View -->
+                <div id="media-attachments" class="w-100" style="display: none;">
+                    {% if has_attachments %}
+                    <h5>Available Downloads</h5>
+                    <ul class="attachments-list">
+                        {% for attachment in question.attachments %}
+                        <li class="attachment-item">
+                            {% if attachment.get('type') == 'url' %}
+                                <i class="fas fa-link"></i>
+                                <strong>{{ attachment.get('description', 'URL Link') }}</strong>
+                                <div class="mt-2">
+                                    <a href="{{ attachment.url }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                        Open URL
+                                    </a>
+                                </div>
+                            {% else %}
+                                <i class="fas fa-file"></i>
+                                <strong>{{ attachment.original_filename }}</strong>
+                                <div class="mt-2">
+                                    <a href="{{ url_for('download_attachment', question_id=question.id, attachment_id=attachment.id) }}" class="btn btn-sm btn-outline-primary">
+                                        Download
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>No attachments available for this question.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- PDF Viewer -->
+                <div id="media-pdf" class="w-100" style="display: none;">
+                    {% if media.pdf %}
+                    <object class="pdf-viewer" data="{{ url_for('download_attachment', question_id=question.id, attachment_id=media.pdf.id) }}" type="application/pdf">
+                        <p>It appears your browser doesn't support embedded PDFs. You can <a href="{{ url_for('download_attachment', question_id=question.id, attachment_id=media.pdf.id) }}">download the PDF</a> instead.</p>
+                    </object>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>No PDF attachment available for this question.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Video Player -->
+                <div id="media-video" class="w-100" style="display: none;">
+                    {% if media.video %}
+                    <div class="video-container">
+                        <video controls>
+                            <source src="{{ url_for('download_attachment', question_id=question.id, attachment_id=media.video.id) }}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>No video attachment available for this question.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Image Viewer -->
+                <div id="media-image" class="w-100" style="display: none;">
+                    {% if media.image %}
+                    <div class="image-viewer">
+                        <div class="image-container">
+                            <img id="zoomable-image" src="{{ url_for('download_attachment', question_id=question.id, attachment_id=media.image.id) }}" alt="Question image" style="transform: scale(1);">
+                        </div>
+                        <div class="zoom-controls">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="zoomImage(-0.1)">Zoom Out</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="zoomImage(0.1)">Zoom In</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="resetZoom()">Reset</button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <p>No image attachment available for this question.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Default Message -->
+                <div id="media-default" class="text-center text-muted">
+                    <p>Select a media type to view attachments.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Keep track of revealed hints
+    const revealedHints = new Set();
+    
+    // Function to reveal a hint and track its usage
+    function revealHint(hintId) {
+        // Show the hint content
+        const hintContent = document.getElementById(`hint-content-${hintId}`);
+        hintContent.style.display = 'block';
+        
+        // Hide the reveal button
+        const revealBtn = document.querySelector(`.hint-reveal-btn[data-hint-id="${hintId}"]`);
+        revealBtn.style.display = 'none';
+        
+        // Add the hint ID to our tracking set
+        revealedHints.add(hintId);
+        
+        // Update the form's hidden inputs
+        updateUsedHintsInputs();
+    }
+    
+    // Function to update the hidden inputs for used hints
+    function updateUsedHintsInputs() {
+        const container = document.getElementById('used-hints-container');
+        
+        // Clear existing inputs
+        container.innerHTML = '';
+        
+        // Add a hidden input for each revealed hint in the correct order
+        // For the server to properly track which hint is which
+        const hints = Array.from(document.querySelectorAll('.card[data-hint-position]'))
+            .filter(card => {
+                const hintId = card.getAttribute('data-hint-id');
+                return revealedHints.has(hintId);
+            })
+            .sort((a, b) => {
+                return parseInt(a.getAttribute('data-hint-position')) - 
+                       parseInt(b.getAttribute('data-hint-position'));
+            });
+            
+        hints.forEach(hint => {
+            const hintId = hint.getAttribute('data-hint-id');
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'used_hints';
+            input.value = hintId;
+            container.appendChild(input);
+        });
+    }
+    
+    // Media viewer controls
+    function showMedia(type) {
+        // Hide all media containers
+        document.getElementById('media-attachments').style.display = 'none';
+        document.getElementById('media-pdf').style.display = 'none';
+        document.getElementById('media-video').style.display = 'none';
+        document.getElementById('media-image').style.display = 'none';
+        document.getElementById('media-default').style.display = 'none';
+        
+        // Remove active class from all buttons
+        document.getElementById('btn-attachments').classList.remove('active');
+        document.getElementById('btn-pdf').classList.remove('active');
+        document.getElementById('btn-video').classList.remove('active');
+        document.getElementById('btn-image').classList.remove('active');
+        
+        // Show selected media
+        if (type === 'attachments' && !document.getElementById('btn-attachments').classList.contains('disabled')) {
+            document.getElementById('media-attachments').style.display = 'block';
+            document.getElementById('btn-attachments').classList.add('active');
+        } else if (type === 'pdf' && !document.getElementById('btn-pdf').classList.contains('disabled')) {
+            document.getElementById('media-pdf').style.display = 'block';
+            document.getElementById('btn-pdf').classList.add('active');
+        } else if (type === 'video' && !document.getElementById('btn-video').classList.contains('disabled')) {
+            document.getElementById('media-video').style.display = 'block';
+            document.getElementById('btn-video').classList.add('active');
+        } else if (type === 'image' && !document.getElementById('btn-image').classList.contains('disabled')) {
+            document.getElementById('media-image').style.display = 'block';
+            document.getElementById('btn-image').classList.add('active');
+        } else {
+            document.getElementById('media-default').style.display = 'block';
+        }
+    }
+    
+    // Image zoom functionality
+    let currentZoom = 1;
+    
+    function zoomImage(factor) {
+        currentZoom += factor;
+        // Limit zoom range
+        if (currentZoom < 0.5) currentZoom = 0.5;
+        if (currentZoom > 3) currentZoom = 3;
+        
+        document.getElementById('zoomable-image').style.transform = `scale(${currentZoom})`;
+    }
+    
+    function resetZoom() {
+        currentZoom = 1;
+        document.getElementById('zoomable-image').style.transform = 'scale(1)';
+    }
+    
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check which media types are available
+        const hasAttachments = !document.getElementById('btn-attachments').classList.contains('disabled');
+        const hasPdf = !document.getElementById('btn-pdf').classList.contains('disabled');
+        const hasVideo = !document.getElementById('btn-video').classList.contains('disabled');
+        const hasImage = !document.getElementById('btn-image').classList.contains('disabled');
+        
+        // Hide the default message if we have media to show
+        if (hasAttachments || hasPdf || hasVideo || hasImage) {
+            document.getElementById('media-default').style.display = 'none';
+        } else {
+            document.getElementById('media-default').style.display = 'block';
+            return;
+        }
+        
+        // Initialize with the appropriate media type
+        if (hasAttachments) {
+            showMedia('attachments');
+        } else if (hasPdf) {
+            showMedia('pdf');
+        } else if (hasVideo) {
+            showMedia('video');
+        } else if (hasImage) {
+            showMedia('image');
+        }
+    });
+</script>
+{% endblock %} 
