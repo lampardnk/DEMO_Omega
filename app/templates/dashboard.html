@@ -1,152 +1,295 @@
-{% extends "base.html" %}
-
-{% block title %}Dashboard | Omega{% endblock %}
-
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-10">
-        {% if user %}
-        <!-- Debug info -->
-        <div class="alert alert-info mb-3">
-            <strong>Debug Info:</strong> 
-            User name: {{ user.basic_info.name }}, 
-            Gradebook entries: {{ user.gradebook|length if user.gradebook else 0 }},
-            Activity entries: {{ user.activity.daily_submissions|length if user.activity and user.activity.daily_submissions else 0 }},
-            Classes: {{ user.class_progress|length if user.class_progress else 0 }}
-        </div>
-        
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h2>User Profile</h2>
-                <div class="time-range">
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-outline-primary btn-sm active">Last 7 days</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm">Last 14 days</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm">Last 30 days</button>
-                    </div>
-                </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.27.1/plotly.min.js"></script>
+    <style>
+        body {
+            background-color: #e9f5fb; /* Light blue background */
+        }
+        .navbar {
+            background-color: #0d6efd;
+        }
+        .navbar-brand, .nav-link {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        .nav-link:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .card {
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .progress {
+            height: 15px;
+            border-radius: 10px;
+        }
+        .avatar-img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .spaced-repetition-box {
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            color: white;
+        }
+        .box-negative-1 {
+            background-color: #dc3545; /* Red */
+        }
+        .box-0 {
+            background-color: #ffc107; /* Yellow */
+        }
+        .box-1 {
+            background-color: #17a2b8; /* Teal */
+        }
+        .box-2 {
+            background-color: #6610f2; /* Indigo */
+        }
+        .box-3 {
+            background-color: #fd7e14; /* Orange */
+        }
+        .box-4 {
+            background-color: #20c997; /* Teal */
+        }
+        .box-5 {
+            background-color: #28a745; /* Green */
+        }
+        .class-progress-title {
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .class-name {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .module-name {
+            font-size: 16px;
+        }
+        .progress-text {
+            font-size: 15px;
+        }
+        .progress-bar-low {
+            background-color: #6c757d; /* Grey */
+        }
+        .progress-bar-medium {
+            background-color: #ffc107; /* Yellow */
+        }
+        .progress-bar-high {
+            background-color: #28a745; /* Green */
+        }
+        .module-box {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 5px 5px 5px 0;
+        }
+        .current-module {
+            background-color: #ffc107; /* Yellow */
+            color: #000;
+        }
+        .next-module {
+            background-color: #6c757d; /* Grey */
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">Omega</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('courses') }}">Courses</a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('questionbank') }}">Questionbank</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('quizzes') }}">Quiz Engine</a>
+                    </li>
+                </ul>
             </div>
-            <div class="card-body">
-                <div class="user-info-section">
-                    <img src="{{ user.basic_info.avatar }}" alt="{{ user.basic_info.name }}" class="user-avatar">
-                    <div class="user-stats">
-                        <h3>{{ user.basic_info.name }}</h3>
-                        <p>Age: {{ user.basic_info.age }}</p>
-                        <p>{{ user.basic_info.description }}</p>
-                        <div>
-                            <strong>Email:</strong> {{ user.email.personal }}<br>
-                            <strong>Parent Email:</strong> {{ user.email.parents }}
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 text-center">
+                                <img src="{{ user.basic_info.avatar }}" alt="Student Avatar" class="avatar-img mb-2">
+                                <h4>{{ user.basic_info.name }}</h4>
+                                <p>Age: {{ user.basic_info.age }}</p>
+                                <p>{{ user.basic_info.description }}</p>
+                                <div class="mt-2">
+                                    <p><strong>Personal Email:</strong> {{ user.email.personal }}</p>
+                                    <p><strong>Parents Email:</strong> {{ user.email.parents }}</p>
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                <h4>Time Range Filter</h4>
+                                <div class="mb-3">
+                                    <select id="timeRangeFilter" class="form-select">
+                                        <option value="3">Last 3 Days</option>
+                                        <option value="7">Last 7 Days</option>
+                                        <option value="14">Last 14 Days</option>
+                                        <option value="30">Last 30 Days</option>
+                                    </select>
+                                </div>
+                                <div id="activityChart" style="width: 100%; height: 300px;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="row">
-            <div class="col-md-8">
-                <!-- Gradebook Section -->
-                <div class="card mb-4">
-                    <div class="card-header">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
                         <h4>Recent Grades</h4>
-                    </div>
-                    <div class="card-body">
-                        {% if user.gradebook and user.gradebook|length > 0 %}
-                            <!-- Plotly grades chart -->
-                            {{ grades_chart|safe }}
-                            
-                            <!-- Data table view -->
-                            <div class="table-responsive mt-4">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Exam</th>
-                                            <th>Your Score</th>
-                                            <th>Class Median</th>
-                                            <th>Class Average</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for grade in user.gradebook %}
-                                        <tr>
-                                            <td>{{ grade.date }}</td>
-                                            <td>{{ grade.exam_name }}</td>
-                                            <td><strong>{{ grade.score }}%</strong></td>
-                                            <td>{{ grade.class_median }}%</td>
-                                            <td>{{ grade.class_average }}%</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        {% else %}
-                            <div class="text-center p-4">
-                                <p class="text-muted">No grade data available for the selected time period.</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <!-- Activity Section -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h4>Activity</h4>
-                    </div>
-                    <div class="card-body">
-                        <!-- Plotly activity chart -->
-                        {{ activity_chart|safe }}
-                    </div>
-                </div>
-
-                <!-- Teacher Comments Section -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h4>Teacher Comments</h4>
-                    </div>
-                    <div class="card-body">
-                        {% if user.teacher_comments and user.teacher_comments|length > 0 %}
-                            {% for comment in user.teacher_comments %}
-                            <div class="card mb-2">
-                                <div class="card-body py-2">
-                                    <p class="mb-1"><small class="text-muted">{{ comment.date }} - {{ comment.teacher }}</small></p>
-                                    <p class="mb-0">{{ comment.comment }}</p>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="text-center p-4">
-                                <p class="text-muted">No teacher comments available for the selected time period.</p>
-                            </div>
-                        {% endif %}
+                        <div id="gradesChart" style="width: 100%; height: 300px;"></div>
                     </div>
                 </div>
             </div>
             
-            <div class="col-md-4">
-                <!-- Classes Section -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h4>Classes & Modules</h4>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="list-group list-group-flush">
-                            {% for progress in user.class_progress %}
-                            {% set class_slug = progress.class_name.split()[0].lower() %}
-                            <div class="list-group-item class-item {{ class_slug }}">
-                                <h5 class="mb-2">{{ progress.class_name }}</h5>
-                                <div class="mb-2">
-                                    <small class="text-muted">Current Module: <strong class="module-name">{{ progress.current_module }}</strong></small>
-                                    <div class="progress mt-1" style="height: 6px;">
-                                        <div class="progress-bar" role="progressbar" style="width: {{ progress.current_progress }}%;" 
-                                            aria-valuenow="{{ progress.current_progress }}" aria-valuemin="0" aria-valuemax="100"></div>
-                                    </div>
-                                    <div class="d-flex justify-content-between mt-1">
-                                        <small>{{ progress.completed_exercises }}/{{ progress.total_exercises }} exercises</small>
-                                        <small>{{ progress.current_progress }}%</small>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h4>Spaced Repetition System</h4>
+                        <p>Tag categorization by mastery level</p>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="spaced-repetition-box box-negative-1">
+                                    <h5>Box -1: Never Recommended <span class="badge bg-light text-dark">{{ user.spaced_repetition.box_negative_1|length }}</span></h5>
+                                    <div>
+                                        {% for tag in user.spaced_repetition.box_negative_1 %}
+                                        <span class="badge bg-light text-dark">{{ tag }}</span>
+                                        {% endfor %}
                                     </div>
                                 </div>
-                                <div>
-                                    <small class="text-muted">Next Module: <span class="text-primary module-name">{{ progress.next_module }}</span></small>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="spaced-repetition-box box-0">
+                                    <h5>Box 0: Always Recommended <span class="badge bg-light text-dark">{{ user.spaced_repetition.box_0|length }}</span></h5>
+                                    <div>
+                                        {% for tag in user.spaced_repetition.box_0 %}
+                                        <span class="badge bg-light text-dark">{{ tag }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <h5>Mastery Levels</h5>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="spaced-repetition-box box-1">
+                                    <h5>Box 1 <span class="badge bg-light text-dark">{{ user.spaced_repetition.box_1|length }}</span></h5>
+                                    <div>
+                                        {% for tag in user.spaced_repetition.box_1 %}
+                                        <span class="badge bg-light text-dark">{{ tag }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="spaced-repetition-box box-2">
+                                    <h5>Box 2 <span class="badge bg-light text-dark">{{ user.spaced_repetition.box_2|length }}</span></h5>
+                                    <div>
+                                        {% for tag in user.spaced_repetition.box_2 %}
+                                        <span class="badge bg-light text-dark">{{ tag }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="spaced-repetition-box box-3">
+                                    <h5>Box 3 <span class="badge bg-light text-dark">{{ user.spaced_repetition.box_3|length }}</span></h5>
+                                    <div>
+                                        {% for tag in user.spaced_repetition.box_3 %}
+                                        <span class="badge bg-light text-dark">{{ tag }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-6">
+                                <div class="spaced-repetition-box box-4">
+                                    <h5>Box 4 <span class="badge bg-light text-dark">{{ user.spaced_repetition.box_4|length }}</span></h5>
+                                    <div>
+                                        {% for tag in user.spaced_repetition.box_4 %}
+                                        <span class="badge bg-light text-dark">{{ tag }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="spaced-repetition-box box-5">
+                                    <h5>Box 5 <span class="badge bg-light text-dark">{{ user.spaced_repetition.box_5|length }}</span></h5>
+                                    <div>
+                                        {% for tag in user.spaced_repetition.box_5 %}
+                                        <span class="badge bg-light text-dark">{{ tag }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h4 class="class-progress-title">Class Progress</h4>
+                        <div class="row">
+                            {% for class_data in user.class_progress %}
+                            <div class="col-md-12 mb-3">
+                                <h5 class="class-name">{{ class_data.class_name }}</h5>
+                                <div class="mb-2 d-flex justify-content-between align-items-center">
+                                    <span class="module-box current-module">{{ class_data.current_module }}</span>
+                                    <span class="module-box next-module">{{ class_data.next_module }}</span>
+                                </div>
+                                <div class="progress mb-2">
+                                    {% if class_data.current_progress < 34 %}
+                                    <div class="progress-bar progress-bar-low" role="progressbar" 
+                                         style="width: {{ class_data.current_progress }}%;" 
+                                         aria-valuenow="{{ class_data.current_progress }}" aria-valuemin="0" aria-valuemax="100">
+                                        {{ class_data.current_progress }}% | {{ class_data.completed_exercises }}/{{ class_data.total_exercises }} exercises
+                                    </div>
+                                    {% elif class_data.current_progress < 67 %}
+                                    <div class="progress-bar progress-bar-medium" role="progressbar" 
+                                         style="width: {{ class_data.current_progress }}%;" 
+                                         aria-valuenow="{{ class_data.current_progress }}" aria-valuemin="0" aria-valuemax="100">
+                                        {{ class_data.current_progress }}% | {{ class_data.completed_exercises }}/{{ class_data.total_exercises }} exercises
+                                    </div>
+                                    {% else %}
+                                    <div class="progress-bar progress-bar-high" role="progressbar" 
+                                         style="width: {{ class_data.current_progress }}%;" 
+                                         aria-valuenow="{{ class_data.current_progress }}" aria-valuemin="0" aria-valuemax="100">
+                                        {{ class_data.current_progress }}% | {{ class_data.completed_exercises }}/{{ class_data.total_exercises }} exercises
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             {% endfor %}
@@ -154,24 +297,229 @@
                     </div>
                 </div>
             </div>
-        </div>
-        {% else %}
-        <div class="card">
-            <div class="card-header">
-                <h2>Dashboard</h2>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-warning">
-                    User data could not be loaded. Please try again later.
+
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h4>Teacher Comments</h4>
+                        <div class="list-group">
+                            {% for comment in user.teacher_comments[:5] %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h5 class="mb-1">{{ comment.teacher }}</h5>
+                                    <small>{{ comment.date }}</small>
+                                </div>
+                                <p class="mb-1">{{ comment.comment }}</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        {% endif %}
     </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-<script src="{{ url_for('static', filename='js/chart-line.js') }}"></script>
-{% endblock %} 
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial data load with default time range
+            updateCharts(7); // Default to 7 days
+            
+            // Time range filter change event
+            document.getElementById('timeRangeFilter').addEventListener('change', function() {
+                const days = parseInt(this.value);
+                updateCharts(days);
+            });
+            
+            function updateCharts(days) {
+                const activityData = {{ user.activity.daily_submissions|tojson }};
+                const gradebookData = {{ user.gradebook|tojson }};
+                
+                // Filter data based on selected time range
+                const now = new Date();
+                const filterDate = new Date();
+                filterDate.setDate(now.getDate() - days);
+                
+                const filteredActivity = activityData.filter(function(item) {
+                    const itemDate = new Date(item.date);
+                    return itemDate >= filterDate;
+                });
+                
+                const filteredGrades = gradebookData.filter(function(item) {
+                    const itemDate = new Date(item.date);
+                    return itemDate >= filterDate;
+                });
+                
+                // Sort data by date
+                filteredActivity.sort(function(a, b) {
+                    return new Date(a.date) - new Date(b.date);
+                });
+                
+                filteredGrades.sort(function(a, b) {
+                    return new Date(a.date) - new Date(b.date);
+                });
+                
+                // Format dates for display
+                const formatDate = function(dateString) {
+                    const date = new Date(dateString);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                };
+                
+                // Activity Chart
+                const dates = filteredActivity.map(function(item) {
+                    return formatDate(item.date);
+                });
+                
+                const successful = filteredActivity.map(function(item) {
+                    return item.unique_successful;
+                });
+                
+                const avgRatings = filteredActivity.map(function(item) {
+                    return item.avg_rating;
+                });
+                
+                const correctPercentage = filteredActivity.map(function(item) {
+                    return item.correct_percentage;
+                });
+                
+                // Create text labels for average ratings to display in the middle of bars
+                const barText = successful.map(function(val, i) {
+                    return avgRatings[i];
+                });
+                
+                // Calculate appropriate y-axis max for bars (slightly higher than max value)
+                const maxSubmissions = Math.max(...successful);
+                const yAxisMax = Math.ceil(maxSubmissions * 1.2); // 20% headroom
+                
+                // Calculate y positions for the percentage line
+                // We need to scale the percentage values (0-100) to match the bar scale
+                const scaledPercentages = correctPercentage.map(function(percent) {
+                    // Maintain the same relative position (e.g., 80% stays at 80% of height)
+                    return (percent / 100) * yAxisMax;
+                });
+                
+                Plotly.newPlot('activityChart', [
+                    {
+                        x: dates,
+                        y: successful,
+                        type: 'bar',
+                        name: 'Successful Submissions',
+                        marker: { color: '#2196F3' }, // Swapped to blue (from green)
+                        text: barText,
+                        textposition: 'inside',
+                        insidetextanchor: 'middle',
+                        hovertemplate: 'Date: %{x}<br>Submissions: %{y}<br>Rating: %{text}<extra></extra>'
+                    },
+                    {
+                        x: dates,
+                        y: correctPercentage,
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: 'Correct %',
+                        marker: { color: '#4CAF50' }, // Swapped to green (from blue)
+                        line: { color: '#4CAF50', width: 3 },
+                        yaxis: 'y2',
+                        hovertemplate: 'Date: %{x}<br>Correct: %{y}%<extra></extra>'
+                    }
+                ], {
+                    title: 'Daily Activity',
+                    xaxis: {},
+                    yaxis: { 
+                        title: 'Successful Submissions',
+                        rangemode: 'tozero',
+                        range: [0, yAxisMax]
+                    },
+                    yaxis2: {
+                        title: 'Correct %',
+                        titlefont: { color: '#4CAF50' },
+                        tickfont: { color: '#4CAF50' },
+                        overlaying: 'y',
+                        side: 'right',
+                        showgrid: false,
+                        range: [0, 100]
+                    },
+                    legend: { orientation: 'h', y: -0.2},
+                    margin: { t: 50, b: 80, l: 60, r: 60 }
+                });
+                
+                // Grades Chart - Multi-bar chart
+                // Sort by date first, then by exam name for consistent ordering
+                filteredGrades.sort(function(a, b) {
+                    const dateCompare = new Date(a.date) - new Date(b.date);
+                    if (dateCompare !== 0) return dateCompare;
+                    return a.exam_name.localeCompare(b.exam_name);
+                });
+                
+                const examNames = filteredGrades.map(function(item) {
+                    return item.exam_name;
+                });
+                
+                const scores = filteredGrades.map(function(item) {
+                    return item.score;
+                });
+                
+                const classMedians = filteredGrades.map(function(item) {
+                    return item.class_median;
+                });
+                
+                const classAverages = filteredGrades.map(function(item) {
+                    return item.class_average;
+                });
+                
+                // Create hover text with date and exam name
+                const hoverText = filteredGrades.map(function(item) {
+                    return formatDate(item.date) + '<br>' + item.exam_name;
+                });
+                
+                // Create x-axis labels with both date and exam name
+                const xAxisLabels = filteredGrades.map(function(item) {
+                    return formatDate(item.date) + '<br>' + item.exam_name;
+                });
+                
+                Plotly.newPlot('gradesChart', [
+                    {
+                        x: examNames,
+                        y: scores,
+                        type: 'bar',
+                        name: 'Your Score',
+                        marker: { color: '#4CAF50' },
+                        hovertemplate: '%{customdata}<br>Your Score: %{y}<extra></extra>',
+                        customdata: hoverText
+                    },
+                    {
+                        x: examNames,
+                        y: classMedians,
+                        type: 'bar',
+                        name: 'Class Median',
+                        marker: { color: '#FFC107' },
+                        hovertemplate: '%{customdata}<br>Class Median: %{y}<extra></extra>',
+                        customdata: hoverText
+                    },
+                    {
+                        x: examNames,
+                        y: classAverages,
+                        type: 'bar',
+                        name: 'Class Average',
+                        marker: { color: '#2196F3' },
+                        hovertemplate: '%{customdata}<br>Class Average: %{y}<extra></extra>',
+                        customdata: hoverText
+                    }
+                ], {
+                    xaxis: { 
+                        tickvals: examNames,
+                        ticktext: xAxisLabels,
+                        tickangle: -45
+                    },
+                    yaxis: { 
+                        title: 'Score',
+                        range: [0, 100]
+                    },
+                    barmode: 'group',
+                    legend: { orientation: 'h', y: 1.3 },
+                    margin: { t: 50, b: 120, l: 60, r: 40 }
+                });
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

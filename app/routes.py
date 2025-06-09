@@ -15,7 +15,6 @@ import base64
 import time
 import mimetypes
 from app.data_loader import load_user_data, filter_data_by_timerange
-from app.chart_utils import create_activity_chart, create_grades_chart
 
 # Custom JSON encoder to handle Decimal objects
 class DecimalEncoder(json.JSONEncoder):
@@ -753,7 +752,6 @@ def about():
 def dashboard():
     # Import data_loader here to avoid circular imports
     from app.data_loader import load_user_data, filter_data_by_timerange
-    from app.chart_utils import create_activity_chart, create_grades_chart
     
     # Get time range from query parameters, default to 7 days
     days = request.args.get('days', 7, type=int)
@@ -802,15 +800,9 @@ def dashboard():
             if 'teacher_comments' not in filtered_data:
                 filtered_data['teacher_comments'] = []
             
-            # Generate charts
-            activity_chart_html = create_activity_chart(filtered_data['activity']['daily_submissions'])
-            grades_chart_html = create_grades_chart(filtered_data['gradebook'])
-            
             return render_template(
                 'dashboard.html', 
                 user=filtered_data,
-                activity_chart=activity_chart_html,
-                grades_chart=grades_chart_html
             )
         else:
             app.logger.error("User data could not be loaded (returned None)")
