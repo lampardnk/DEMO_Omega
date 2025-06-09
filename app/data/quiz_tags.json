@@ -1,0 +1,22 @@
+[
+    {
+        "id": "beginner",
+        "display_name": "Beginner"
+    },
+    {
+        "id": "intermediate",
+        "display_name": "Intermediate"
+    },
+    {
+        "id": "advanced",
+        "display_name": "Advanced"
+    },
+    {
+        "id": "practice",
+        "display_name": "Practice"
+    },
+    {
+        "id": "exam",
+        "display_name": "Exam"
+    }
+] 

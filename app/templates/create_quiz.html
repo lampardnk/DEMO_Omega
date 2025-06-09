@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{% if quiz %}Edit Quiz{% else %}Create Quiz{% endif %}{% endblock %}
+
+{% block content %}
+<h1>{% if quiz %}Edit Quiz{% else %}Create New Quiz{% endif %}</h1>
+
+<form method="post">
+    <div class="mb-3">
+        <label for="quiz_name" class="form-label">Quiz Name</label>
+        <input type="text" class="form-control" id="quiz_name" name="quiz_name" value="{{ quiz.name if quiz else '' }}" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="selected_tags" class="form-label">Quiz Tags</label>
+        <select name="selected_tags" id="selected_tags" class="form-select" multiple size="4">
+            {% for tag in all_quiz_tags %}
+                <option value="{{ tag.id }}" {% if quiz and tag.id in quiz.tags %}selected{% endif %}>{{ tag.display_name }}</option>
+            {% endfor %}
+        </select>
+        <div class="form-text">Hold Ctrl/Cmd to select multiple tags</div>
+    </div>
+
+    <h2 class="h4 mt-4">Select Questions</h2>
+    <div class="list-group">
+        {% for question in questions %}
+        <label class="list-group-item">
+            <input class="form-check-input me-1" type="checkbox" name="question_ids" value="{{ question.id }}"
+                   {% if quiz and question.id in quiz.question_ids %}checked{% endif %}>
+            {{ question.name or 'Unnamed Question' }}
+        </label>
+        {% endfor %}
+    </div>
+
+    <button type="submit" class="btn btn-primary mt-3">{% if quiz %}Update Quiz{% else %}Create Quiz{% endif %}</button>
+    <a href="{{ url_for('quizzes') }}" class="btn btn-secondary mt-3">Cancel</a>
+</form>
+{% endblock %} 

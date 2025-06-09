@@ -51,6 +51,17 @@ def save_submissions(submissions):
     with open(app.config['SUBMISSIONS_FILE'], 'w') as f:
         json.dump(submissions, f, indent=4)
 
+def load_quizzes():
+    if os.path.exists(app.config['QUIZZES_FILE']):
+        with open(app.config['QUIZZES_FILE'], 'r') as f:
+            return json.load(f)
+    return []
+
+def save_quizzes(quizzes):
+    os.makedirs(os.path.dirname(app.config['QUIZZES_FILE']), exist_ok=True)
+    with open(app.config['QUIZZES_FILE'], 'w') as f:
+        json.dump(quizzes, f, indent=4)
+
 def load_tags():
     """Load tags from the tags file"""
     if os.path.exists(app.config['TAGS_FILE']):
@@ -62,6 +73,19 @@ def save_tags(tags):
     """Save tags to the tags file"""
     os.makedirs(os.path.dirname(app.config['TAGS_FILE']), exist_ok=True)
     with open(app.config['TAGS_FILE'], 'w') as f:
+        json.dump(tags, f, indent=4)
+
+def load_quiz_tags():
+    """Load quiz tags from the quiz tags file"""
+    if os.path.exists(app.config['QUIZ_TAGS_FILE']):
+        with open(app.config['QUIZ_TAGS_FILE'], 'r') as f:
+            return json.load(f)
+    return []
+
+def save_quiz_tags(tags):
+    """Save quiz tags to the quiz tags file"""
+    os.makedirs(os.path.dirname(app.config['QUIZ_TAGS_FILE']), exist_ok=True)
+    with open(app.config['QUIZ_TAGS_FILE'], 'w') as f:
         json.dump(tags, f, indent=4)
 
 def get_all_tags():
@@ -76,9 +100,26 @@ def get_tag_by_id(tag_id):
             return tag
     return None
 
+def get_all_quiz_tags():
+    """Get all quiz tags with their IDs and display names"""
+    return load_quiz_tags()
+
+def get_quiz_tag_by_id(tag_id):
+    """Get a quiz tag by its ID"""
+    tags = load_quiz_tags()
+    for tag in tags:
+        if tag['id'] == tag_id:
+            return tag
+    return None
+
 def get_tag_display_name(tag_id):
     """Get the display name for a tag ID"""
     tag = get_tag_by_id(tag_id)
+    return tag['display_name'] if tag else tag_id
+
+def get_quiz_tag_display_name(tag_id):
+    """Get the display name for a quiz tag ID"""
+    tag = get_quiz_tag_by_id(tag_id)
     return tag['display_name'] if tag else tag_id
 
 def get_latex_cache_key(latex_string):
@@ -412,9 +453,134 @@ def questionbank():
                           sort_by=sort_by, all_tags=all_tags, show_deleted=show_deleted,
                           search_query=search_query)
 
-@app.route('/quiz_engine')
-def quiz_engine():
-    return render_template('quiz_engine.html')
+@app.route('/quizzes')
+def quizzes():
+    search_query = request.args.get('search', '').strip().lower()
+    filter_tags = request.args.getlist('tags')
+    sort_by = request.args.get('sort', 'newest')
+    show_deleted = request.args.get('show_deleted') == 'true'
+    
+    # Load all quizzes
+    all_quizzes = load_quizzes()
+    
+    # Filter by search query if provided
+    filtered_quizzes = all_quizzes
+    if search_query:
+        filtered_quizzes = [q for q in filtered_quizzes if search_query in q.get('name', '').lower()]
+    
+    # Filter by tags if selected
+    if filter_tags:
+        filtered_quizzes = [q for q in filtered_quizzes if set(filter_tags).intersection(set(q.get('tags', [])))]
+    
+    # Filter deleted quizzes
+    if not show_deleted:
+        filtered_quizzes = [q for q in filtered_quizzes if not q.get('deleted', False)]
+    
+    # Sort the quizzes
+    if sort_by == 'name_asc':
+        filtered_quizzes = sorted(filtered_quizzes, key=lambda q: q.get('name', '').lower())
+    elif sort_by == 'name_desc':
+        filtered_quizzes = sorted(filtered_quizzes, key=lambda q: q.get('name', '').lower(), reverse=True)
+    elif sort_by == 'questions_asc':
+        filtered_quizzes = sorted(filtered_quizzes, key=lambda q: len(q.get('question_ids', [])))
+    elif sort_by == 'questions_desc':
+        filtered_quizzes = sorted(filtered_quizzes, key=lambda q: len(q.get('question_ids', [])), reverse=True)
+    else:  # Default is 'newest' which is the default order (no sorting needed)
+        pass
+    
+    # Get all quiz tags for the filter dropdown
+    all_quiz_tags = get_all_quiz_tags()
+    
+    return render_template('quizzes.html', 
+                          quizzes=filtered_quizzes, 
+                          search_query=search_query,
+                          filter_tags=filter_tags,
+                          all_quiz_tags=all_quiz_tags,
+                          sort_by=sort_by,
+                          show_deleted=show_deleted)
+
+@app.route('/quizzes/new', methods=['GET', 'POST'])
+def create_quiz():
+    if request.method == 'POST':
+        quiz_name = request.form.get('quiz_name')
+        question_ids = request.form.getlist('question_ids')
+        selected_tags = request.form.getlist('selected_tags')
+
+        if not quiz_name or not question_ids:
+            flash('Quiz name and at least one question are required.', 'danger')
+            return redirect(url_for('create_quiz'))
+
+        quizzes = load_quizzes()
+        new_quiz = {
+            'id': str(uuid.uuid4()),
+            'name': quiz_name,
+            'question_ids': question_ids,
+            'tags': selected_tags,
+            'deleted': False
+        }
+        quizzes.append(new_quiz)
+        save_quizzes(quizzes)
+
+        flash('Quiz created successfully!', 'success')
+        return redirect(url_for('quizzes'))
+
+    questions = load_questions()
+    all_quiz_tags = get_all_quiz_tags()
+    return render_template('create_quiz.html', questions=questions, quiz=None, all_quiz_tags=all_quiz_tags)
+
+@app.route('/quizzes/<quiz_id>/edit', methods=['GET', 'POST'])
+def edit_quiz(quiz_id):
+    quizzes = load_quizzes()
+    quiz = next((q for q in quizzes if q['id'] == quiz_id), None)
+    if not quiz:
+        flash('Quiz not found.', 'danger')
+        return redirect(url_for('quizzes'))
+
+    if request.method == 'POST':
+        quiz_name = request.form.get('quiz_name')
+        question_ids = request.form.getlist('question_ids')
+        selected_tags = request.form.getlist('selected_tags')
+
+        if not quiz_name or not question_ids:
+            flash('Quiz name and at least one question are required.', 'danger')
+            return redirect(url_for('edit_quiz', quiz_id=quiz_id))
+
+        quiz['name'] = quiz_name
+        quiz['question_ids'] = question_ids
+        quiz['tags'] = selected_tags
+        save_quizzes(quizzes)
+
+        flash('Quiz updated successfully!', 'success')
+        return redirect(url_for('quizzes'))
+
+    questions = load_questions()
+    all_quiz_tags = get_all_quiz_tags()
+    return render_template('create_quiz.html', questions=questions, quiz=quiz, all_quiz_tags=all_quiz_tags)
+
+@app.route('/quizzes/<quiz_id>/attempt')
+def attempt_quiz(quiz_id):
+    quizzes = load_quizzes()
+    quiz = next((q for q in quizzes if q['id'] == quiz_id), None)
+
+    if not quiz:
+        flash('Quiz not found.', 'danger')
+        return redirect(url_for('quizzes'))
+        
+    if quiz.get('deleted', False):
+        flash('This quiz has been deleted and cannot be attempted.', 'danger')
+        return redirect(url_for('quizzes'))
+
+    all_questions = load_questions(include_deleted=True)
+    quiz_questions = [q for q in all_questions if q['id'] in quiz['question_ids']]
+    
+    # Ensure svgs are generated
+    for question in quiz_questions:
+        if not question.get('svg') or question.get('svg_generated') is False:
+            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+            question['svg_generated'] = True
+    save_questions(all_questions)
+
+    return render_template('attempt_quiz.html', quiz=quiz, questions=quiz_questions)
 
 @app.route('/about')
 def about():
@@ -423,6 +589,10 @@ def about():
 @app.route('/dashboard')
 def dashboard():
     return render_template('dashboard.html')
+
+@app.route('/courses')
+def courses():
+    return render_template('courses.html')
 
 @app.route('/add_question', methods=['GET', 'POST'])
 def add_question():
@@ -756,7 +926,7 @@ def edit_question(question_id):
     
     return render_template('edit_question.html', form=form, attachment_form=attachment_form, question=question, all_tags=all_tags)
 
-@app.route('/delete_question/<question_id>', methods=['POST'])
+@app.route('/delete_question/<question_id>', methods=['GET', 'POST'])
 def delete_question(question_id):
     questions = load_questions(include_deleted=True)
     question = next((q for q in questions if q.get('id') == question_id), None)
@@ -913,8 +1083,10 @@ def manage_tags():
 def inject_tag_helpers():
     return {
         'get_tag_by_id': get_tag_by_id,
-        'get_tag_display_name': get_tag_display_name
-    } 
+        'get_tag_display_name': get_tag_display_name,
+        'get_quiz_tag_by_id': get_quiz_tag_by_id,
+        'get_quiz_tag_display_name': get_quiz_tag_display_name
+    }
 
 def allowed_file(filename):
     """Check if the file extension is allowed"""
@@ -1106,4 +1278,111 @@ def delete_hint(question_id, hint_id):
             'success': True
         })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500 
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/quiz_tags', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def manage_quiz_tags():
+    """API endpoint to manage quiz tags"""
+    tags = load_quiz_tags()
+    
+    if request.method == 'GET':
+        # Return all tags
+        return jsonify(tags)
+        
+    elif request.method == 'POST':
+        # Add a new tag
+        data = request.get_json()
+        if not data or 'display_name' not in data:
+            return jsonify({'success': False, 'error': 'No display name provided'}), 400
+            
+        # Create a safe ID from the display name
+        tag_id = data.get('id', data['display_name'].lower().replace(' ', '_'))
+        
+        # Check if the tag already exists
+        if any(tag['id'] == tag_id for tag in tags):
+            return jsonify({'success': False, 'error': 'Tag ID already exists'}), 400
+            
+        # Add the new tag
+        new_tag = {
+            'id': tag_id,
+            'display_name': data['display_name']
+        }
+        tags.append(new_tag)
+        save_quiz_tags(tags)
+        
+        return jsonify({'success': True, 'tag': new_tag})
+        
+    elif request.method == 'PUT':
+        # Update a tag's display name
+        data = request.get_json()
+        if not data or 'id' not in data or 'display_name' not in data:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+            
+        # Find the tag to update
+        tag_to_update = next((tag for tag in tags if tag['id'] == data['id']), None)
+        if not tag_to_update:
+            return jsonify({'success': False, 'error': 'Tag not found'}), 404
+            
+        # Update the display name
+        tag_to_update['display_name'] = data['display_name']
+        save_quiz_tags(tags)
+        
+        return jsonify({'success': True, 'tag': tag_to_update})
+        
+    elif request.method == 'DELETE':
+        # Delete a tag
+        data = request.get_json()
+        if not data or 'id' not in data:
+            return jsonify({'success': False, 'error': 'No tag ID provided'}), 400
+            
+        # Check if the tag exists
+        tag_to_delete = next((tag for tag in tags if tag['id'] == data['id']), None)
+        if not tag_to_delete:
+            return jsonify({'success': False, 'error': 'Tag not found'}), 404
+            
+        # Remove the tag
+        tags.remove(tag_to_delete)
+        save_quiz_tags(tags)
+        
+        # Also need to remove this tag from all quizzes
+        quizzes = load_quizzes()
+        updated = False
+        for quiz in quizzes:
+            if 'tags' in quiz and data['id'] in quiz['tags']:
+                quiz['tags'].remove(data['id'])
+                updated = True
+        
+        if updated:
+            save_quizzes(quizzes)
+            
+        return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': 'Invalid request method'}), 405 
+
+@app.route('/quizzes/<quiz_id>/delete', methods=['GET', 'POST'])
+def delete_quiz(quiz_id):
+    quizzes = load_quizzes()
+    quiz = next((q for q in quizzes if q['id'] == quiz_id), None)
+    
+    if not quiz:
+        flash('Quiz not found.', 'danger')
+    else:
+        quiz['deleted'] = True
+        save_quizzes(quizzes)
+        flash('Quiz deleted successfully.', 'success')
+    
+    return redirect(url_for('quizzes'))
+
+@app.route('/quizzes/<quiz_id>/restore', methods=['GET', 'POST'])
+def restore_quiz(quiz_id):
+    quizzes = load_quizzes()
+    quiz = next((q for q in quizzes if q['id'] == quiz_id), None)
+    
+    if not quiz:
+        flash('Quiz not found.', 'danger')
+    else:
+        quiz['deleted'] = False
+        save_quizzes(quizzes)
+        flash('Quiz restored successfully.', 'success')
+    
+    return redirect(url_for('quizzes')) 

@@ -1,0 +1,24 @@
+[
+    {
+        "id": "adeae915-7fc0-47f4-90cb-4f3f4e1f1521",
+        "name": "test quiz",
+        "question_ids": [
+            "bf548474-b58d-49c1-a67d-3171bd0637cf"
+        ],
+        "deleted": true
+    },
+    {
+        "id": "d5bb027c-a89f-4c17-a07d-5eea49d54c2e",
+        "name": "Sample",
+        "question_ids": [
+            "q2",
+            "q3",
+            "q4"
+        ],
+        "tags": [
+            "beginner",
+            "practice"
+        ],
+        "deleted": true
+    }
+]
