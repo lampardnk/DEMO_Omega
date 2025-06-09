@@ -34,5 +34,31 @@
                 "weight": 3
             }
         ]
+    },
+    {
+        "id": "d8736116-0605-45c3-b94e-8a3abbb47bac",
+        "name": "test",
+        "content": "qwerqwer",
+        "answer": "34",
+        "svg": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgNTAwIDEwMCI+CiAgICA8cmVjdCB3aWR0aD0iNTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2Y4ZDdkYSIgc3Ryb2tlPSIjZjVjNmNiIiBzdHJva2Utd2lkdGg9IjEiIHJ4PSI1IiByeT0iNSIvPgogICAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzcyMWMyNCI+CiAgICAgICAgTGFUZVggZXJyb3I6IFlvdSBjYW4ndCB1c2UgYFxlbmQnIGluIGludGVybmFsIHZlcnRpY2FsIG1vZGUuCiAgICA8L3RleHQ+Cjwvc3ZnPg==",
+        "svg_generated": true,
+        "rating": 2.0,
+        "tags": [
+            "math"
+        ],
+        "deleted": false,
+        "attachments": [],
+        "hints": [
+            {
+                "id": "d3a24bd3-12e3-4252-97b9-0d6ef14f2452",
+                "text": "test",
+                "weight": 5
+            },
+            {
+                "id": "d3d71a57-ea61-468a-ba7f-cf4b79176621",
+                "text": "fvf f f f f f f. f f. f f f. f f f f. f f f f. f f f ff. f f f. f f f. f f f. f f f f f. f f. f f f f. f f. f f. f f",
+                "weight": 5
+            }
+        ]
     }
 ]

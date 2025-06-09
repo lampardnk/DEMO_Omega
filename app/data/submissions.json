@@ -1,1 +1,25 @@
-[]
+[
+    {
+        "id": "85a7a850-2e04-4c9a-b329-2f7d2f61e915",
+        "question_id": "8b6a53af-06c1-4513-8944-93dd2eb9687d",
+        "user_answer": "34",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-09 15:32:06",
+        "used_hints": [
+            "4db6d8fb-adf1-483e-b321-3e541f8e82a0",
+            "b9505d86-a7cc-4d25-b218-b6b4c02ecfa3"
+        ],
+        "hint_data": [
+            {
+                "id": "4db6d8fb-adf1-483e-b321-3e541f8e82a0",
+                "position": 1
+            },
+            {
+                "id": "b9505d86-a7cc-4d25-b218-b6b4c02ecfa3",
+                "position": 2
+            }
+        ],
+        "quiz_id": null
+    }
+]

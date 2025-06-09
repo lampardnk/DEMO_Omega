@@ -1,4 +1,4 @@
-import json
+import os
 import uuid
 import time
 from flask import render_template, request, redirect, url_for, jsonify, flash, send_from_directory
@@ -16,7 +16,10 @@ def compile_latex():
     try:
         data = request.get_json()
         if not data or 'latex' not in data:
-            return jsonify({'success': False, 'error': 'No LaTeX content provided'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'No LaTeX content provided'
+            }), 400
 
         latex_content = data['latex']
         complete_latex = LaTeXProcessor.ensure_complete_document(latex_content)
@@ -43,12 +46,16 @@ def questionbank():
 
     # Apply filters
     if filter_tags:
-        questions = [q for q in questions if any(tag in q.get('tags', []) for tag in filter_tags)]
+        questions = [
+            q for q in questions
+            if any(tag in q.get('tags', []) for tag in filter_tags)
+        ]
 
     if search_query:
-        questions = [q for q in questions if 
-                    search_query in q.get('name', '').lower() or 
-                    search_query in q.get('content', '').lower()]
+        questions = [
+            q for q in questions if search_query in q.get('name', '').lower()
+            or search_query in q.get('content', '').lower()
+        ]
 
     # Sort questions
     if sort_by == 'rating_asc':
@@ -64,27 +71,30 @@ def questionbank():
         if not question.get('svg') or question.get('svg_generated') is False:
             try:
                 question['svg'] = LaTeXProcessor.latex_to_svg(
-                    LaTeXProcessor.ensure_complete_document(question['content'])
-                )
+                    LaTeXProcessor.ensure_complete_document(
+                        question['content']))
                 question['svg_generated'] = True
             except Exception as e:
-                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+                app.logger.error(
+                    f"Error generating SVG for question {question.get('id')}: {str(e)}"
+                )
                 question['svg'] = '/static/img/latex-placeholder.svg'
                 question['svg_generated'] = False
             updated = True
 
     if updated:
-        DataManager.save_questions(DataManager.load_questions(include_deleted=True))
+        DataManager.save_questions(
+            DataManager.load_questions(include_deleted=True))
 
     all_tags = TagManager.get_all_tags()
 
-    return render_template('index.html', 
-                          questions=questions, 
-                          filter_tags=filter_tags,
-                          sort_by=sort_by, 
-                          all_tags=all_tags, 
-                          show_deleted=show_deleted,
-                          search_query=search_query)
+    return render_template('index.html',
+                           questions=questions,
+                           filter_tags=filter_tags,
+                           sort_by=sort_by,
+                           all_tags=all_tags,
+                           show_deleted=show_deleted,
+                           search_query=search_query)
 
 
 @app.route('/quizzes')
@@ -99,33 +109,47 @@ def quizzes():
     # Apply filters
     filtered_quizzes = all_quizzes
     if search_query:
-        filtered_quizzes = [q for q in filtered_quizzes if search_query in q.get('name', '').lower()]
+        filtered_quizzes = [
+            q for q in filtered_quizzes
+            if search_query in q.get('name', '').lower()
+        ]
 
     if filter_tags:
-        filtered_quizzes = [q for q in filtered_quizzes if set(filter_tags).intersection(set(q.get('tags', [])))]
+        filtered_quizzes = [
+            q for q in filtered_quizzes
+            if set(filter_tags).intersection(set(q.get('tags', [])))
+        ]
 
     if not show_deleted:
-        filtered_quizzes = [q for q in filtered_quizzes if not q.get('deleted', False)]
+        filtered_quizzes = [
+            q for q in filtered_quizzes if not q.get('deleted', False)
+        ]
 
     # Sort quizzes
     if sort_by == 'name_asc':
-        filtered_quizzes = sorted(filtered_quizzes, key=lambda q: q.get('name', '').lower())
+        filtered_quizzes = sorted(filtered_quizzes,
+                                  key=lambda q: q.get('name', '').lower())
     elif sort_by == 'name_desc':
-        filtered_quizzes = sorted(filtered_quizzes, key=lambda q: q.get('name', '').lower(), reverse=True)
+        filtered_quizzes = sorted(filtered_quizzes,
+                                  key=lambda q: q.get('name', '').lower(),
+                                  reverse=True)
     elif sort_by == 'questions_asc':
-        filtered_quizzes = sorted(filtered_quizzes, key=lambda q: len(q.get('question_ids', [])))
+        filtered_quizzes = sorted(filtered_quizzes,
+                                  key=lambda q: len(q.get('question_ids', [])))
     elif sort_by == 'questions_desc':
-        filtered_quizzes = sorted(filtered_quizzes, key=lambda q: len(q.get('question_ids', [])), reverse=True)
+        filtered_quizzes = sorted(filtered_quizzes,
+                                  key=lambda q: len(q.get('question_ids', [])),
+                                  reverse=True)
 
     all_quiz_tags = TagManager.get_all_quiz_tags()
 
     return render_template('quizzes.html',
-                          quizzes=filtered_quizzes,
-                          search_query=search_query,
-                          filter_tags=filter_tags,
-                          all_quiz_tags=all_quiz_tags,
-                          sort_by=sort_by,
-                          show_deleted=show_deleted)
+                           quizzes=filtered_quizzes,
+                           search_query=search_query,
+                           filter_tags=filter_tags,
+                           all_quiz_tags=all_quiz_tags,
+                           sort_by=sort_by,
+                           show_deleted=show_deleted)
 
 
 @app.route('/quizzes/new', methods=['GET', 'POST'])
@@ -148,22 +172,22 @@ def create_quiz():
         if not name:
             flash('Quiz name is required!', 'error')
             return render_template('create_quiz.html',
-                                  questions=questions,
-                                  all_quiz_tags=quiz_tags,
-                                  all_tags=all_tags,
-                                  filter_tags=filter_tags,
-                                  search_query=search_query,
-                                  sort_by=sort_by)
+                                   questions=questions,
+                                   all_quiz_tags=quiz_tags,
+                                   all_tags=all_tags,
+                                   filter_tags=filter_tags,
+                                   search_query=search_query,
+                                   sort_by=sort_by)
 
         if not question_ids:
             flash('Please select at least one question for the quiz!', 'error')
             return render_template('create_quiz.html',
-                                  questions=questions,
-                                  all_quiz_tags=quiz_tags,
-                                  all_tags=all_tags,
-                                  filter_tags=filter_tags,
-                                  search_query=search_query,
-                                  sort_by=sort_by)
+                                   questions=questions,
+                                   all_quiz_tags=quiz_tags,
+                                   all_tags=all_tags,
+                                   filter_tags=filter_tags,
+                                   search_query=search_query,
+                                   sort_by=sort_by)
 
         quizzes = DataManager.load_quizzes()
         new_quiz = {
@@ -181,12 +205,12 @@ def create_quiz():
         return redirect(url_for('quizzes'))
 
     return render_template('create_quiz.html',
-                          questions=questions,
-                          all_quiz_tags=quiz_tags,
-                          all_tags=all_tags,
-                          filter_tags=filter_tags,
-                          search_query=search_query,
-                          sort_by=sort_by)
+                           questions=questions,
+                           all_quiz_tags=quiz_tags,
+                           all_tags=all_tags,
+                           filter_tags=filter_tags,
+                           search_query=search_query,
+                           sort_by=sort_by)
 
 
 @app.route('/quizzes/<quiz_id>/edit', methods=['GET', 'POST'])
@@ -214,18 +238,18 @@ def edit_quiz(quiz_id):
         if not name:
             flash('Quiz name is required!', 'error')
             return render_template('create_quiz.html',
-                                  quiz=quiz,
-                                  questions=questions,
-                                  all_quiz_tags=all_quiz_tags,
-                                  all_tags=all_tags)
+                                   quiz=quiz,
+                                   questions=questions,
+                                   all_quiz_tags=all_quiz_tags,
+                                   all_tags=all_tags)
 
         if not question_ids:
             flash('Please select at least one question for the quiz!', 'error')
             return render_template('create_quiz.html',
-                                  quiz=quiz,
-                                  questions=questions,
-                                  all_quiz_tags=all_quiz_tags,
-                                  all_tags=all_tags)
+                                   quiz=quiz,
+                                   questions=questions,
+                                   all_quiz_tags=all_quiz_tags,
+                                   all_tags=all_tags)
 
         quiz['name'] = name
         quiz['tags'] = selected_tags
@@ -236,10 +260,10 @@ def edit_quiz(quiz_id):
         return redirect(url_for('quizzes'))
 
     return render_template('create_quiz.html',
-                          quiz=quiz,
-                          questions=questions,
-                          all_quiz_tags=all_quiz_tags,
-                          all_tags=all_tags)
+                           quiz=quiz,
+                           questions=questions,
+                           all_quiz_tags=all_quiz_tags,
+                           all_tags=all_tags)
 
 
 @app.route('/quizzes/<quiz_id>/attempt')
@@ -256,26 +280,32 @@ def attempt_quiz(quiz_id):
         return redirect(url_for('quizzes'))
 
     all_questions = DataManager.load_questions(include_deleted=True)
-    quiz_questions = [q for q in all_questions if q['id'] in quiz['question_ids']]
+    quiz_questions = [
+        q for q in all_questions if q['id'] in quiz['question_ids']
+    ]
 
     # Generate SVGs
     _ensure_question_svgs(quiz_questions, all_questions)
 
     # Calculate progress
     all_submissions = DataManager.load_submissions()
-    correct_submissions = [s for s in all_submissions 
-                          if s.get('outcome') == 'Correct' and s.get('quiz_id') == quiz_id]
+    correct_submissions = [
+        s for s in all_submissions
+        if s.get('outcome') == 'Correct' and s.get('quiz_id') == quiz_id
+    ]
     completed_question_ids = set(s['question_id'] for s in correct_submissions)
 
     total_questions = len(quiz_questions)
-    completed_count = sum(1 for q in quiz_questions if q['id'] in completed_question_ids)
-    progress = int((completed_count / total_questions) * 100) if total_questions > 0 else 0
+    completed_count = sum(1 for q in quiz_questions
+                          if q['id'] in completed_question_ids)
+    progress = int((completed_count / total_questions) *
+                   100) if total_questions > 0 else 0
 
     return render_template('attempt_quiz.html',
-                          quiz=quiz,
-                          questions=quiz_questions,
-                          progress=progress,
-                          completed_questions=completed_question_ids)
+                           quiz=quiz,
+                           questions=quiz_questions,
+                           progress=progress,
+                           completed_questions=completed_question_ids)
 
 
 @app.route('/about')
@@ -292,7 +322,9 @@ def dashboard():
         user_data = load_user_data()
 
         if user_data:
-            app.logger.info(f"User data loaded. Name: {user_data.get('basic_info', {}).get('name')}")
+            app.logger.info(
+                f"User data loaded. Name: {user_data.get('basic_info', {}).get('name')}"
+            )
 
             import copy
             filtered_data = copy.deepcopy(user_data)
@@ -337,24 +369,21 @@ def add_question():
 
         if not selected_tag_ids:
             flash('Please select at least one tag for the question.', 'error')
-            return render_template('add_question.html', 
-                                  form=form, 
-                                  attachment_form=attachment_form, 
-                                  all_tags=all_tags)
+            return render_template('add_question.html',
+                                   form=form,
+                                   attachment_form=attachment_form,
+                                   all_tags=all_tags)
 
         question_id = str(uuid.uuid4())
 
         # Process URL attachments
         urls = request.form.getlist('attachment_url')
-        url_attachments = [
-            {
-                'id': str(uuid.uuid4()),
-                'type': 'url',
-                'url': url.strip(),
-                'description': 'URL Link'
-            }
-            for url in urls if url.strip()
-        ]
+        url_attachments = [{
+            'id': str(uuid.uuid4()),
+            'type': 'url',
+            'url': url.strip(),
+            'description': 'URL Link'
+        } for url in urls if url.strip()]
 
         # Process hints
         hints = _process_hints_from_form(request.form)
@@ -366,7 +395,8 @@ def add_question():
             'answer': form.answer.data,
             'svg': '',
             'svg_generated': False,
-            'rating': float(form.rating.data),
+            'rating':
+            float(form.rating.data) if form.rating.data is not None else 0.0,
             'tags': selected_tag_ids,
             'deleted': False,
             'attachments': url_attachments,
@@ -375,12 +405,13 @@ def add_question():
 
         # Process file uploads
         if 'attachment_file' in request.files:
-            file_attachments = _process_file_uploads(request.files.getlist('attachment_file'), question_id)
+            file_attachments = _process_file_uploads(
+                request.files.getlist('attachment_file'), question_id)
             if file_attachments is None:  # Error occurred
-                return render_template('add_question.html', 
-                                      form=form, 
-                                      attachment_form=attachment_form, 
-                                      all_tags=all_tags)
+                return render_template('add_question.html',
+                                       form=form,
+                                       attachment_form=attachment_form,
+                                       all_tags=all_tags)
             new_question['attachments'].extend(file_attachments)
 
         questions = DataManager.load_questions(include_deleted=True)
@@ -389,10 +420,10 @@ def add_question():
         flash('Question added successfully!', 'success')
         return redirect(url_for('questionbank'))
 
-    return render_template('add_question.html', 
-                          form=form, 
-                          attachment_form=attachment_form, 
-                          all_tags=all_tags)
+    return render_template('add_question.html',
+                           form=form,
+                           attachment_form=attachment_form,
+                           all_tags=all_tags)
 
 
 @app.route('/question/<question_id>')
@@ -416,11 +447,12 @@ def view_question(question_id):
     if not question.get('svg') or question.get('svg_generated') is False:
         try:
             question['svg'] = LaTeXProcessor.latex_to_svg(
-                LaTeXProcessor.ensure_complete_document(question['content'])
-            )
+                LaTeXProcessor.ensure_complete_document(question['content']))
             question['svg_generated'] = True
         except Exception as e:
-            app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+            app.logger.error(
+                f"Error generating SVG for question {question.get('id')}: {str(e)}"
+            )
             question['svg'] = '/static/img/latex-placeholder.svg'
             question['svg_generated'] = False
 
@@ -429,14 +461,14 @@ def view_question(question_id):
     all_tags = TagManager.get_all_tags()
 
     return render_template('view_question.html',
-                          question=question,
-                          creating_quiz=creating_quiz,
-                          quiz_name=quiz_name,
-                          selected_quiz_tags=selected_quiz_tags,
-                          filter_tags=filter_tags,
-                          search_query=search_query,
-                          sort_by=sort_by,
-                          get_tag_by_id=TagManager.get_tag_by_id)
+                           question=question,
+                           creating_quiz=creating_quiz,
+                           quiz_name=quiz_name,
+                           selected_quiz_tags=selected_quiz_tags,
+                           filter_tags=filter_tags,
+                           search_query=search_query,
+                           sort_by=sort_by,
+                           get_tag_by_id=TagManager.get_tag_by_id)
 
 
 @app.route('/attempt_question/<question_id>', methods=['GET', 'POST'])
@@ -478,7 +510,8 @@ def attempt_question(question_id):
             'question_id': question_id,
             'user_answer': user_answer,
             'outcome': 'Correct' if is_correct else 'Incorrect',
-            'verdict': 'Your answer is correct.' if is_correct else 'Your answer is incorrect. Please try again.',
+            'verdict': 'Your answer is correct.'
+            if is_correct else 'Your answer is incorrect. Please try again.',
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
             'used_hints': used_hints,
             'hint_data': hint_data,
@@ -492,31 +525,37 @@ def attempt_question(question_id):
         flash(new_submission['verdict'], 'success' if is_correct else 'error')
 
         if is_correct and submission_quiz_id:
-            return redirect(url_for('attempt_quiz', quiz_id=submission_quiz_id))
+            return redirect(url_for('attempt_quiz',
+                                    quiz_id=submission_quiz_id))
 
         # Return with context parameters
         if creating_quiz:
-            return redirect(url_for('attempt_question',
-                                   question_id=question_id,
-                                   quiz_id=quiz_id,
-                                   creating_quiz=creating_quiz,
-                                   quiz_name=quiz_name,
-                                   selected_quiz_tags=selected_quiz_tags,
-                                   filter_tags=filter_tags,
-                                   search_query=search_query,
-                                   sort_by=sort_by))
+            return redirect(
+                url_for('attempt_question',
+                        question_id=question_id,
+                        quiz_id=quiz_id,
+                        creating_quiz=creating_quiz,
+                        quiz_name=quiz_name,
+                        selected_quiz_tags=selected_quiz_tags,
+                        filter_tags=filter_tags,
+                        search_query=search_query,
+                        sort_by=sort_by))
         else:
-            return redirect(url_for('attempt_question', question_id=question_id, quiz_id=quiz_id))
+            return redirect(
+                url_for('attempt_question',
+                        question_id=question_id,
+                        quiz_id=quiz_id))
 
     # Generate SVG if needed
     if not question.get('svg') or question.get('svg_generated') is False:
         try:
             question['svg'] = LaTeXProcessor.latex_to_svg(
-                LaTeXProcessor.ensure_complete_document(question['content'])
-            )
+                LaTeXProcessor.ensure_complete_document(question['content']))
             question['svg_generated'] = True
         except Exception as e:
-            app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+            app.logger.error(
+                f"Error generating SVG for question {question.get('id')}: {str(e)}"
+            )
             question['svg'] = '/static/img/latex-placeholder.svg'
             question['svg_generated'] = False
 
@@ -524,7 +563,9 @@ def attempt_question(question_id):
 
     # Get submissions for this question
     all_submissions = DataManager.load_submissions()
-    question_submissions = [s for s in all_submissions if s['question_id'] == question_id]
+    question_submissions = [
+        s for s in all_submissions if s['question_id'] == question_id
+    ]
     question_submissions.sort(key=lambda x: x['timestamp'], reverse=True)
 
     return render_template('attempt_question.html',
@@ -567,16 +608,17 @@ def edit_question(question_id):
 
         if not selected_tag_ids:
             flash('Please select at least one tag for the question.', 'error')
-            return render_template('edit_question.html', 
-                                  form=form, 
-                                  attachment_form=attachment_form, 
-                                  question=question, 
-                                  all_tags=all_tags)
+            return render_template('edit_question.html',
+                                   form=form,
+                                   attachment_form=attachment_form,
+                                   question=question,
+                                   all_tags=all_tags)
 
         new_question_id = str(uuid.uuid4())
 
         # Handle existing attachments
-        kept_attachments = _process_kept_attachments(request.form, question, new_question_id)
+        kept_attachments = _process_kept_attachments(request.form, question,
+                                                     new_question_id)
 
         # Add new URL attachments
         urls = request.form.getlist('attachment_url')
@@ -596,7 +638,8 @@ def edit_question(question_id):
             'answer': form.answer.data,
             'svg': question.get('svg', ''),
             'svg_generated': False,
-            'rating': float(form.rating.data),
+            'rating':
+            float(form.rating.data) if form.rating.data is not None else 0.0,
             'tags': selected_tag_ids,
             'deleted': False,
             'edited_from': question_id,
@@ -606,14 +649,15 @@ def edit_question(question_id):
 
         # Process new file uploads
         if 'attachment_file' in request.files:
-            file_attachments = _process_file_uploads(request.files.getlist('attachment_file'), 
-                                                    new_question_id, kept_attachments)
+            file_attachments = _process_file_uploads(
+                request.files.getlist('attachment_file'), new_question_id,
+                kept_attachments)
             if file_attachments is None:  # Error occurred
-                return render_template('edit_question.html', 
-                                      form=form, 
-                                      attachment_form=attachment_form,
-                                      question=question, 
-                                      all_tags=all_tags)
+                return render_template('edit_question.html',
+                                       form=form,
+                                       attachment_form=attachment_form,
+                                       question=question,
+                                       all_tags=all_tags)
             new_question['attachments'].extend(file_attachments)
 
         questions.append(new_question)
@@ -621,11 +665,11 @@ def edit_question(question_id):
         flash('Question updated successfully!', 'success')
         return redirect(url_for('view_question', question_id=new_question_id))
 
-    return render_template('edit_question.html', 
-                          form=form, 
-                          attachment_form=attachment_form, 
-                          question=question, 
-                          all_tags=all_tags)
+    return render_template('edit_question.html',
+                           form=form,
+                           attachment_form=attachment_form,
+                           question=question,
+                           all_tags=all_tags)
 
 
 @app.route('/delete_question/<question_id>', methods=['GET', 'POST'])
@@ -652,7 +696,8 @@ def download_attachment(question_id, attachment_id):
         flash('Question not found!', 'error')
         return redirect(url_for('index'))
 
-    attachment = next((a for a in question.get('attachments', []) if a.get('id') == attachment_id), None)
+    attachment = next((a for a in question.get('attachments', [])
+                       if a.get('id') == attachment_id), None)
 
     if not attachment:
         flash('Attachment not found!', 'error')
@@ -661,15 +706,21 @@ def download_attachment(question_id, attachment_id):
     if attachment.get('type') == 'url':
         return redirect(attachment['url'])
     else:
-        attachment_dir = os.path.dirname(os.path.join(app.config['UPLOAD_FOLDER'], attachment['path']))
+        attachment_dir = os.path.dirname(
+            os.path.join(app.config['UPLOAD_FOLDER'], attachment['path']))
         filename = os.path.basename(attachment['path'])
-        is_pdf = attachment.get('file_type') == 'pdf' or filename.lower().endswith('.pdf')
+        is_pdf = attachment.get(
+            'file_type') == 'pdf' or filename.lower().endswith('.pdf')
 
-        return send_from_directory(attachment_dir, filename, as_attachment=not is_pdf,
-                                  download_name=attachment['original_filename'])
+        return send_from_directory(
+            attachment_dir,
+            filename,
+            as_attachment=not is_pdf,
+            download_name=attachment['original_filename'])
 
 
-@app.route('/remove_attachment/<question_id>/<attachment_id>', methods=['POST'])
+@app.route('/remove_attachment/<question_id>/<attachment_id>',
+           methods=['POST'])
 def remove_attachment(question_id, attachment_id):
     questions = DataManager.load_questions(include_deleted=True)
     question = next((q for q in questions if q.get('id') == question_id), None)
@@ -679,7 +730,8 @@ def remove_attachment(question_id, attachment_id):
         return redirect(url_for('index'))
 
     attachments = question.get('attachments', [])
-    attachment = next((a for a in attachments if a.get('id') == attachment_id), None)
+    attachment = next((a for a in attachments if a.get('id') == attachment_id),
+                      None)
 
     if attachment:
         attachments.remove(attachment)
@@ -696,15 +748,18 @@ def remove_attachment(question_id, attachment_id):
 @app.route('/api/tags', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_tags():
     """API endpoint to manage tags"""
-    return _handle_tag_management(DataManager.load_tags, DataManager.save_tags, 
-                                 DataManager.load_questions, DataManager.save_questions)
+    return _handle_tag_management(DataManager.load_tags, DataManager.save_tags,
+                                  DataManager.load_questions,
+                                  DataManager.save_questions)
 
 
 @app.route('/api/quiz_tags', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_quiz_tags():
     """API endpoint to manage quiz tags"""
-    return _handle_tag_management(DataManager.load_quiz_tags, DataManager.save_quiz_tags,
-                                 DataManager.load_quizzes, DataManager.save_quizzes)
+    return _handle_tag_management(DataManager.load_quiz_tags,
+                                  DataManager.save_quiz_tags,
+                                  DataManager.load_quizzes,
+                                  DataManager.save_quizzes)
 
 
 @app.route('/api/questions/<question_id>/hints', methods=['POST'])
@@ -713,25 +768,43 @@ def add_hint(question_id):
     try:
         data = request.get_json()
         if not data or 'text' not in data or 'weight' not in data:
-            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields'
+            }), 400
 
         hint_text = data['text'].strip()
         word_count = len(hint_text.split())
         if word_count > 50:
-            return jsonify({'success': False, 'error': f'Hint text must be 50 words or less (currently {word_count} words)'}), 400
+            return jsonify({
+                'success':
+                False,
+                'error':
+                f'Hint text must be 50 words or less (currently {word_count} words)'
+            }), 400
 
         try:
             weight = int(data['weight'])
             if weight < 1 or weight > 10:
-                return jsonify({'success': False, 'error': 'Weight must be between 1 and 10'}), 400
+                return jsonify({
+                    'success': False,
+                    'error': 'Weight must be between 1 and 10'
+                }), 400
         except ValueError:
-            return jsonify({'success': False, 'error': 'Weight must be an integer'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Weight must be an integer'
+            }), 400
 
         questions = DataManager.load_questions(include_deleted=True)
-        question = next((q for q in questions if q.get('id') == question_id), None)
+        question = next((q for q in questions if q.get('id') == question_id),
+                        None)
 
         if not question:
-            return jsonify({'success': False, 'error': 'Question not found'}), 404
+            return jsonify({
+                'success': False,
+                'error': 'Question not found'
+            }), 404
 
         new_hint = {
             'id': str(uuid.uuid4()),
@@ -755,37 +828,70 @@ def update_hint(question_id, hint_id):
     try:
         data = request.get_json()
         if not data or ('text' not in data and 'weight' not in data):
-            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields'
+            }), 400
 
         if 'text' in data:
             hint_text = data['text'].strip()
             word_count = len(hint_text.split())
             if word_count > 50:
-                return jsonify({'success': False, 'error': f'Hint text must be 50 words or less (currently {word_count} words)'}), 400
+                return jsonify({
+                    'success':
+                    False,
+                    'error':
+                    f'Hint text must be 50 words or less (currently {word_count} words)'
+                }), 400
+
+        # Set a default weight value
+        weight = None
 
         if 'weight' in data:
             try:
                 weight = int(data['weight'])
                 if weight < 1 or weight > 10:
-                    return jsonify({'success': False, 'error': 'Weight must be between 1 and 10'}), 400
+                    return jsonify({
+                        'success': False,
+                        'error': 'Weight must be between 1 and 10'
+                    }), 400
             except ValueError:
-                return jsonify({'success': False, 'error': 'Weight must be an integer'}), 400
+                return jsonify({
+                    'success': False,
+                    'error': 'Weight must be an integer'
+                }), 400
 
         questions = DataManager.load_questions(include_deleted=True)
-        question = next((q for q in questions if q.get('id') == question_id), None)
+        question = next((q for q in questions if q.get('id') == question_id),
+                        None)
 
         if not question:
-            return jsonify({'success': False, 'error': 'Question not found'}), 404
+            return jsonify({
+                'success': False,
+                'error': 'Question not found'
+            }), 404
 
-        hint = next((h for h in question.get('hints', []) if h.get('id') == hint_id), None)
+        hint = next(
+            (h for h in question.get('hints', []) if h.get('id') == hint_id),
+            None)
         if not hint:
             return jsonify({'success': False, 'error': 'Hint not found'}), 404
 
+        # Check if 'text' is in data before using hint_text
         if 'text' in data:
-            hint['text'] = hint_text
-        if 'weight' in data:
-hint['weight'] = weight
+            hint_text = data['text'].strip()
+            word_count = len(hint_text.split())
+            if word_count > 50:
+                return jsonify({
+                    'success':
+                    False,
+                    'error':
+                    f'Hint text must be 50 words or less (currently {word_count} words)'
+                }), 400
 
+            hint['text'] = hint_text
+        if 'weight' in data and weight is not None:
+            hint['weight'] = weight
         DataManager.save_questions(questions)
         return jsonify({'success': True, 'hint': hint})
     except Exception as e:
@@ -797,12 +903,18 @@ def delete_hint(question_id, hint_id):
     """API endpoint to delete a hint"""
     try:
         questions = DataManager.load_questions(include_deleted=True)
-        question = next((q for q in questions if q.get('id') == question_id), None)
+        question = next((q for q in questions if q.get('id') == question_id),
+                        None)
 
         if not question:
-            return jsonify({'success': False, 'error': 'Question not found'}), 404
+            return jsonify({
+                'success': False,
+                'error': 'Question not found'
+            }), 404
 
-        hint = next((h for h in question.get('hints', []) if h.get('id') == hint_id), None)
+        hint = next(
+            (h for h in question.get('hints', []) if h.get('id') == hint_id),
+            None)
         if not hint:
             return jsonify({'success': False, 'error': 'Hint not found'}), 404
 
@@ -861,7 +973,9 @@ def debug_user_data():
 
 
 # Helper functions
-def _get_filtered_questions(filter_tags=None, search_query='', sort_by='newest'):
+def _get_filtered_questions(filter_tags=None,
+                            search_query='',
+                            sort_by='newest'):
     """Get filtered and sorted questions with SVGs generated"""
     all_questions = DataManager.load_questions(include_deleted=True)
     questions = [q for q in all_questions if not q.get('deleted', False)]
@@ -905,11 +1019,13 @@ def _ensure_question_svgs(questions, all_questions):
         if not question.get('svg') or question.get('svg_generated') is False:
             try:
                 question['svg'] = LaTeXProcessor.latex_to_svg(
-                    LaTeXProcessor.ensure_complete_document(question['content'])
-                )
+                    LaTeXProcessor.ensure_complete_document(
+                        question['content']))
                 question['svg_generated'] = True
             except Exception as e:
-                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+                app.logger.error(
+                    f"Error generating SVG for question {question.get('id')}: {str(e)}"
+                )
                 question['svg'] = '/static/img/latex-placeholder.svg'
                 question['svg_generated'] = False
             updated = True
@@ -955,7 +1071,8 @@ def _process_file_uploads(files, question_id, existing_attachments=None):
     if existing_attachments:
         # Count existing files for validation
         all_files = valid_files + [
-            type('obj', (object,), {'filename': a.get('original_filename', '')})
+            type('obj',
+                 (object, ), {'filename': a.get('original_filename', '')})
             for a in existing_attachments
         ]
         is_valid, error_message = FileManager.validate_uploads(all_files)
@@ -972,7 +1089,8 @@ def _process_file_uploads(files, question_id, existing_attachments=None):
             attachment = FileManager.save_attachment(file, question_id)
             file_attachments.append(attachment)
         else:
-            ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'unknown'
+            ext = file.filename.rsplit(
+                '.', 1)[1].lower() if '.' in file.filename else 'unknown'
             flash(f'File type {ext} is not allowed', 'error')
             return None
 
@@ -983,10 +1101,12 @@ def _process_kept_attachments(form_data, question, new_question_id):
     """Process attachments to keep from existing question"""
     kept_attachments = []
     for attachment_id in form_data.getlist('keep_attachment'):
-        attachment = next((a for a in question.get('attachments', []) if a.get('id') == attachment_id), None)
+        attachment = next((a for a in question.get('attachments', [])
+                           if a.get('id') == attachment_id), None)
         if attachment:
             kept_attachments.append(attachment)
-            FileManager.copy_attachment(attachment, question['id'], new_question_id)
+            FileManager.copy_attachment(attachment, question['id'],
+                                        new_question_id)
 
     return kept_attachments
 
@@ -1005,15 +1125,13 @@ def _process_hint_data(used_hints, hints):
                 'position': hint_positions[hint_id]
             })
         else:
-            hint_data.append({
-                'id': hint_id,
-                'position': 0
-            })
+            hint_data.append({'id': hint_id, 'position': 0})
 
     return hint_data
 
 
-def _handle_tag_management(load_func, save_func, load_items_func, save_items_func):
+def _handle_tag_management(load_func, save_func, load_items_func,
+                           save_items_func):
     """Generic tag management handler"""
     tags = load_func()
 
@@ -1023,17 +1141,20 @@ def _handle_tag_management(load_func, save_func, load_items_func, save_items_fun
     elif request.method == 'POST':
         data = request.get_json()
         if not data or 'display_name' not in data:
-            return jsonify({'success': False, 'error': 'No display name provided'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'No display name provided'
+            }), 400
 
         tag_id = data.get('id', data['display_name'].lower().replace(' ', '_'))
 
         if any(tag['id'] == tag_id for tag in tags):
-            return jsonify({'success': False, 'error': 'Tag ID already exists'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Tag ID already exists'
+            }), 400
 
-        new_tag = {
-            'id': tag_id,
-            'display_name': data['display_name']
-        }
+        new_tag = {'id': tag_id, 'display_name': data['display_name']}
         tags.append(new_tag)
         save_func(tags)
 
@@ -1042,9 +1163,13 @@ def _handle_tag_management(load_func, save_func, load_items_func, save_items_fun
     elif request.method == 'PUT':
         data = request.get_json()
         if not data or 'id' not in data or 'display_name' not in data:
-            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields'
+            }), 400
 
-        tag_to_update = next((tag for tag in tags if tag['id'] == data['id']), None)
+        tag_to_update = next((tag for tag in tags if tag['id'] == data['id']),
+                             None)
         if not tag_to_update:
             return jsonify({'success': False, 'error': 'Tag not found'}), 404
 
@@ -1056,9 +1181,13 @@ def _handle_tag_management(load_func, save_func, load_items_func, save_items_fun
     elif request.method == 'DELETE':
         data = request.get_json()
         if not data or 'id' not in data:
-            return jsonify({'success': False, 'error': 'No tag ID provided'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'No tag ID provided'
+            }), 400
 
-        tag_to_delete = next((tag for tag in tags if tag['id'] == data['id']), None)
+        tag_to_delete = next((tag for tag in tags if tag['id'] == data['id']),
+                             None)
         if not tag_to_delete:
             return jsonify({'success': False, 'error': 'Tag not found'}), 404
 
