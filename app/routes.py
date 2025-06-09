@@ -14,6 +14,8 @@ from decimal import Decimal
 import base64
 import time
 import mimetypes
+from app.data_loader import load_user_data, filter_data_by_timerange
+from app.chart_utils import create_activity_chart, create_grades_chart
 
 # Custom JSON encoder to handle Decimal objects
 class DecimalEncoder(json.JSONEncoder):
@@ -749,7 +751,77 @@ def about():
 
 @app.route('/dashboard')
 def dashboard():
-    return render_template('dashboard.html')
+    # Import data_loader here to avoid circular imports
+    from app.data_loader import load_user_data, filter_data_by_timerange
+    from app.chart_utils import create_activity_chart, create_grades_chart
+    
+    # Get time range from query parameters, default to 7 days
+    days = request.args.get('days', 7, type=int)
+    
+    # Print debug info about current directory and parameters
+    import os
+    app.logger.info(f"Current working directory: {os.getcwd()}")
+    app.logger.info(f"Selected time range: {days} days")
+    
+    # Load user data
+    try:
+        # Load and filter the user data
+        app.logger.info("Attempting to load user data...")
+        user_data = load_user_data()
+        
+        if user_data:
+            # Print debug information
+            app.logger.info(f"User data loaded. Name: {user_data.get('basic_info', {}).get('name')}")
+            app.logger.info(f"Gradebook entries: {len(user_data.get('gradebook', []))}")
+            app.logger.info(f"Activity entries: {len(user_data.get('activity', {}).get('daily_submissions', []))}")
+            app.logger.info(f"Class progress entries: {len(user_data.get('class_progress', []))}")
+            
+            # Prepare data for the template
+            import copy
+            filtered_data = copy.deepcopy(user_data)
+            
+            # Apply time filtering 
+            filtered_data = filter_data_by_timerange(filtered_data, days)
+            
+            # Print filtered data information
+            app.logger.info(f"After filtering (days={days}):")
+            app.logger.info(f"Gradebook entries: {len(filtered_data.get('gradebook', []))}")
+            app.logger.info(f"Activity entries: {len(filtered_data.get('activity', {}).get('daily_submissions', []))}")
+            
+            # Make sure we have the activity structure even if empty
+            if 'activity' not in filtered_data:
+                filtered_data['activity'] = {'daily_submissions': []}
+            elif 'daily_submissions' not in filtered_data['activity']:
+                filtered_data['activity']['daily_submissions'] = []
+                
+            # Make sure we have the gradebook structure even if empty
+            if 'gradebook' not in filtered_data:
+                filtered_data['gradebook'] = []
+                
+            # Make sure we have the teacher_comments structure even if empty
+            if 'teacher_comments' not in filtered_data:
+                filtered_data['teacher_comments'] = []
+            
+            # Generate charts
+            activity_chart_html = create_activity_chart(filtered_data['activity']['daily_submissions'])
+            grades_chart_html = create_grades_chart(filtered_data['gradebook'])
+            
+            return render_template(
+                'dashboard.html', 
+                user=filtered_data,
+                activity_chart=activity_chart_html,
+                grades_chart=grades_chart_html
+            )
+        else:
+            app.logger.error("User data could not be loaded (returned None)")
+            flash("User data could not be loaded", "error")
+            return render_template('dashboard.html')
+    except Exception as e:
+        app.logger.error(f"Error loading user data: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        flash("Could not load user data", "error")
+        return render_template('dashboard.html')
 
 @app.route('/courses')
 def courses():
@@ -1632,3 +1704,22 @@ def restore_quiz(quiz_id):
         flash('Quiz restored successfully.', 'success')
     
     return redirect(url_for('quizzes')) 
+
+@app.route('/debug/user_data')
+def debug_user_data():
+    """Debug route to directly view the user data as JSON"""
+    from app.data_loader import load_user_data
+    
+    try:
+        user_data = load_user_data()
+        if user_data:
+            # Return the user data as JSON
+            return jsonify(user_data)
+        else:
+            return jsonify({"error": "User data could not be loaded"}), 500
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500 

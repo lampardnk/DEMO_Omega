@@ -142,10 +142,16 @@ DEMO_Omega/
 - **Dashboard**
   - User basic info (Avatar, name, age, classes, goals, short description)
   - Personal and Parents email
-  - Time range for data: Past X/3/7/14/21/30 days
-  - Gradebook 
-  - Teacher's comments on X most recent school days, colored to show performance/attitude rating on a scale (X limited to 10)
-  - Activity (2 lines, y-axis with 2 scales): number of unique questions fully completed each day and success rate; show average rating of questions on each bar
+  - Time range selector for data: Past X/3/7/14/21/30 days
+  - Gradebook: most recent in-class exams date, name and student score, with 2 more collumns for class median and class average for the same exam
+  - Teacher's comments on X most recent school days.
+  - Activity:
+    - bar to show number of unique successful sumissions each day
+    - text on the bar which show average rating of the questions that received successful submissions that day
+    - line to show correct over total submission percentage
+
+  (IGNORE features below for now)
+  - Recent submissions (pull from submissions.json)
   - Spaced repetition tags boxes (exclude box -1): Compare changes between 3 days ago and current boxes of tags
   - Compare with classmates
 

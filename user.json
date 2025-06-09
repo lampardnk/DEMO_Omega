@@ -1,0 +1,173 @@
+{
+  "user": {
+    "basic_info": {
+      "name": "Alex Johnson",
+      "age": 16,
+      "avatar": "https://i.pravatar.cc/150?img=3",
+      "classes": [
+        "Math 101",
+        "Physics",
+        "Chemistry",
+        "English Literature",
+        "History"
+      ],
+      "description": "Dedicated student focusing on STEM subjects with interest in robotics."
+    },
+    "email": {
+      "personal": "alex.johnson@example.com",
+      "parents": "parent.johnson@example.com"
+    },
+    "class_progress": [
+      {
+        "class_name": "Math 101",
+        "current_module": "Algebra II",
+        "current_progress": 75,
+        "next_module": "Trigonometry Basics",
+        "completed_exercises": 24,
+        "total_exercises": 32
+      },
+      {
+        "class_name": "Physics",
+        "current_module": "Kinematics",
+        "current_progress": 90,
+        "next_module": "Forces and Motion",
+        "completed_exercises": 18,
+        "total_exercises": 20
+      },
+      {
+        "class_name": "Chemistry",
+        "current_module": "Periodic Table",
+        "current_progress": 60,
+        "next_module": "Chemical Bonding",
+        "completed_exercises": 12,
+        "total_exercises": 20
+      },
+      {
+        "class_name": "English Literature",
+        "current_module": "Shakespeare's Sonnets",
+        "current_progress": 45,
+        "next_module": "Modern Poetry",
+        "completed_exercises": 9,
+        "total_exercises": 20
+      },
+      {
+        "class_name": "History",
+        "current_module": "World War II",
+        "current_progress": 80,
+        "next_module": "Cold War Era",
+        "completed_exercises": 16,
+        "total_exercises": 20
+      }
+    ],
+    "gradebook": [
+      {
+        "date": "2025-06-08",
+        "exam_name": "Math Midterm",
+        "score": 85,
+        "class_median": 78,
+        "class_average": 76
+      },
+      {
+        "date": "2025-06-07",
+        "exam_name": "Physics Lab Practical",
+        "score": 92,
+        "class_median": 84,
+        "class_average": 80
+      },
+      {
+        "date": "2025-06-06",
+        "exam_name": "Chemistry Quiz 4",
+        "score": 88,
+        "class_median": 82,
+        "class_average": 79
+      },
+      {
+        "date": "2025-06-03",
+        "exam_name": "English Essay",
+        "score": 78,
+        "class_median": 76,
+        "class_average": 75
+      },
+      {
+        "date": "2025-06-01",
+        "exam_name": "History Presentation",
+        "score": 94,
+        "class_median": 85,
+        "class_average": 83
+      }
+    ],
+    "teacher_comments": [
+      {
+        "date": "2025-06-09",
+        "teacher": "Ms. Wilson",
+        "comment": "Alex showed great improvement in the math midterm. Keep up the good work!"
+      },
+      {
+        "date": "2025-06-08",
+        "teacher": "Mr. Rodriguez",
+        "comment": "Excellent lab work in physics class. Your experimental setup was innovative."
+      },
+      {
+        "date": "2025-06-07",
+        "teacher": "Mrs. Chang",
+        "comment": "Your chemistry presentation was well-researched but needs more detail on molecular structures."
+      },
+      {
+        "date": "2025-06-05",
+        "teacher": "Mr. Thompson",
+        "comment": "Your analysis of Shakespeare's use of metaphor was insightful. Consider exploring more examples in your next essay."
+      },
+      {
+        "date": "2025-06-03",
+        "teacher": "Ms. Garcia",
+        "comment": "Outstanding work on your history presentation! Your research into primary sources was exceptional."
+      }
+    ],
+    "activity": {
+      "daily_submissions": [
+        {
+          "date": "2025-06-09",
+          "unique_successful": 14,
+          "avg_rating": 4.5,
+          "correct_percentage": 92
+        },
+        {
+          "date": "2025-06-08",
+          "unique_successful": 10,
+          "avg_rating": 4.2,
+          "correct_percentage": 85
+        },
+        {
+          "date": "2025-06-07",
+          "unique_successful": 15,
+          "avg_rating": 4.7,
+          "correct_percentage": 95
+        },
+        {
+          "date": "2025-06-06",
+          "unique_successful": 8,
+          "avg_rating": 3.9,
+          "correct_percentage": 78
+        },
+        {
+          "date": "2025-06-05",
+          "unique_successful": 12,
+          "avg_rating": 4.3,
+          "correct_percentage": 88
+        },
+        {
+          "date": "2025-06-04",
+          "unique_successful": 9,
+          "avg_rating": 4.1,
+          "correct_percentage": 82
+        },
+        {
+          "date": "2025-06-03",
+          "unique_successful": 11,
+          "avg_rating": 4.4,
+          "correct_percentage": 89
+        }
+      ]
+    }
+  }
+}

@@ -5,14 +5,173 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-10">
+        {% if user %}
+        <!-- Debug info -->
+        <div class="alert alert-info mb-3">
+            <strong>Debug Info:</strong> 
+            User name: {{ user.basic_info.name }}, 
+            Gradebook entries: {{ user.gradebook|length if user.gradebook else 0 }},
+            Activity entries: {{ user.activity.daily_submissions|length if user.activity and user.activity.daily_submissions else 0 }},
+            Classes: {{ user.class_progress|length if user.class_progress else 0 }}
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2>User Profile</h2>
+                <div class="time-range">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-sm active">Last 7 days</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm">Last 14 days</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm">Last 30 days</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="user-info-section">
+                    <img src="{{ user.basic_info.avatar }}" alt="{{ user.basic_info.name }}" class="user-avatar">
+                    <div class="user-stats">
+                        <h3>{{ user.basic_info.name }}</h3>
+                        <p>Age: {{ user.basic_info.age }}</p>
+                        <p>{{ user.basic_info.description }}</p>
+                        <div>
+                            <strong>Email:</strong> {{ user.email.personal }}<br>
+                            <strong>Parent Email:</strong> {{ user.email.parents }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Gradebook Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h4>Recent Grades</h4>
+                    </div>
+                    <div class="card-body">
+                        {% if user.gradebook and user.gradebook|length > 0 %}
+                            <!-- Plotly grades chart -->
+                            {{ grades_chart|safe }}
+                            
+                            <!-- Data table view -->
+                            <div class="table-responsive mt-4">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Exam</th>
+                                            <th>Your Score</th>
+                                            <th>Class Median</th>
+                                            <th>Class Average</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for grade in user.gradebook %}
+                                        <tr>
+                                            <td>{{ grade.date }}</td>
+                                            <td>{{ grade.exam_name }}</td>
+                                            <td><strong>{{ grade.score }}%</strong></td>
+                                            <td>{{ grade.class_median }}%</td>
+                                            <td>{{ grade.class_average }}%</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center p-4">
+                                <p class="text-muted">No grade data available for the selected time period.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Activity Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h4>Activity</h4>
+                    </div>
+                    <div class="card-body">
+                        <!-- Plotly activity chart -->
+                        {{ activity_chart|safe }}
+                    </div>
+                </div>
+
+                <!-- Teacher Comments Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h4>Teacher Comments</h4>
+                    </div>
+                    <div class="card-body">
+                        {% if user.teacher_comments and user.teacher_comments|length > 0 %}
+                            {% for comment in user.teacher_comments %}
+                            <div class="card mb-2">
+                                <div class="card-body py-2">
+                                    <p class="mb-1"><small class="text-muted">{{ comment.date }} - {{ comment.teacher }}</small></p>
+                                    <p class="mb-0">{{ comment.comment }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center p-4">
+                                <p class="text-muted">No teacher comments available for the selected time period.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <!-- Classes Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h4>Classes & Modules</h4>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            {% for progress in user.class_progress %}
+                            {% set class_slug = progress.class_name.split()[0].lower() %}
+                            <div class="list-group-item class-item {{ class_slug }}">
+                                <h5 class="mb-2">{{ progress.class_name }}</h5>
+                                <div class="mb-2">
+                                    <small class="text-muted">Current Module: <strong class="module-name">{{ progress.current_module }}</strong></small>
+                                    <div class="progress mt-1" style="height: 6px;">
+                                        <div class="progress-bar" role="progressbar" style="width: {{ progress.current_progress }}%;" 
+                                            aria-valuenow="{{ progress.current_progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <small>{{ progress.completed_exercises }}/{{ progress.total_exercises }} exercises</small>
+                                        <small>{{ progress.current_progress }}%</small>
+                                    </div>
+                                </div>
+                                <div>
+                                    <small class="text-muted">Next Module: <span class="text-primary module-name">{{ progress.next_module }}</span></small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
         <div class="card">
             <div class="card-header">
                 <h2>Dashboard</h2>
             </div>
             <div class="card-body">
-                <!-- Empty as requested, just the heading -->
+                <div class="alert alert-warning">
+                    User data could not be loaded. Please try again later.
+                </div>
             </div>
         </div>
+        {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart-line.js') }}"></script>
 {% endblock %} 
