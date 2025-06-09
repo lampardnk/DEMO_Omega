@@ -122,7 +122,19 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-12">
+        {% if creating_quiz %}
+        <a href="{{ url_for('create_quiz', 
+                           quiz_name=quiz_name, 
+                           selected_tags=selected_quiz_tags,
+                           filter_tags=filter_tags,
+                           search_query=search_query,
+                           sort_by=sort_by) }}" 
+           class="btn btn-outline-secondary mb-3">&larr; Back to Quiz Creation</a>
+        {% elif quiz_id %}
+        <a href="{{ url_for('attempt_quiz', quiz_id=quiz_id) }}" class="btn btn-outline-secondary mb-3">&larr; Back to Quiz</a>
+        {% else %}
         <a href="{{ url_for('index') }}" class="btn btn-outline-secondary mb-3">&larr; Back to Questions</a>
+        {% endif %}
         <h1>Attempt Question</h1>
     </div>
 </div>
@@ -188,12 +200,30 @@
         <!-- Answer Section -->
         <div class="answer-section">
             <h4>Your Answer</h4>
-            <form method="POST" action="{{ url_for('attempt_question', question_id=question.id) }}" id="answer-form">
+            <form method="POST" action="{{ url_for('attempt_question', question_id=question.id, quiz_id=quiz_id) }}" id="answer-form">
                 <div class="mb-3">
                     <textarea name="answer" class="form-control" rows="5" placeholder="Type your answer here..." maxlength="2000"></textarea>
                 </div>
                 <!-- Hidden inputs for used hints will be added dynamically via JavaScript -->
                 <div id="used-hints-container"></div>
+                
+                {% if quiz_id %}
+                <input type="hidden" name="quiz_id" value="{{ quiz_id }}">
+                {% endif %}
+                
+                {% if creating_quiz %}
+                <input type="hidden" name="creating_quiz" value="true">
+                <input type="hidden" name="quiz_name" value="{{ quiz_name }}">
+                {% for tag_id in selected_quiz_tags %}
+                <input type="hidden" name="selected_quiz_tags" value="{{ tag_id }}">
+                {% endfor %}
+                {% for tag_id in filter_tags %}
+                <input type="hidden" name="filter_tags" value="{{ tag_id }}">
+                {% endfor %}
+                <input type="hidden" name="search_query" value="{{ search_query }}">
+                <input type="hidden" name="sort_by" value="{{ sort_by }}">
+                {% endif %}
+                
                 <button type="submit" class="btn btn-primary">Submit Answer</button>
             </form>
         </div>

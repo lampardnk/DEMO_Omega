@@ -438,8 +438,14 @@ def questionbank():
     updated = False
     for question in questions:
         if not question.get('svg') or question.get('svg_generated') is False:
-            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-            question['svg_generated'] = True
+            try:
+                question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+                question['svg_generated'] = True
+            except Exception as e:
+                # If LaTeX compilation fails, use a placeholder image
+                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+                question['svg'] = '/static/img/latex-placeholder.svg'
+                question['svg_generated'] = False
             updated = True
     
     # Save the updated questions if any SVGs were generated
@@ -501,61 +507,189 @@ def quizzes():
 
 @app.route('/quizzes/new', methods=['GET', 'POST'])
 def create_quiz():
+    quiz_tags = get_all_quiz_tags()
+    all_tags = get_all_tags()
+    
+    # Get filter parameters from request
+    filter_tags = request.args.getlist('filter_tags') or []
+    search_query = request.args.get('search_query', '')
+    sort_by = request.args.get('sort_by', 'newest')
+    quiz_name = request.args.get('quiz_name', '')
+    selected_quiz_tags = request.args.getlist('selected_tags') or []
+    
+    # Load all questions, including deleted ones for admin viewing
+    all_questions = load_questions(include_deleted=True)
+    
+    # Filter out deleted questions for display by default
+    questions = [q for q in all_questions if not q.get('deleted', False)]
+    
+    # Ensure SVG is generated for all questions
+    for question in questions:
+        if not question.get('svg') or question.get('svg_generated') is False:
+            try:
+                question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+                question['svg_generated'] = True
+            except Exception as e:
+                # If LaTeX compilation fails, use a placeholder image
+                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+                question['svg'] = '/static/img/latex-placeholder.svg'
+                question['svg_generated'] = False
+    
+    # Save questions with generated SVGs
+    save_questions(all_questions)
+    
+    # Apply search and tag filters if provided
+    if search_query or filter_tags:
+        filtered_questions = []
+        for question in questions:
+            # Check for tag match if tag filter is applied
+            tags_match = True
+            if filter_tags:
+                question_tags = question.get('tags', [])
+                # Ensure at least one selected tag is in the question's tags
+                tags_match = any(tag in question_tags for tag in filter_tags)
+            
+            # Check for text match if search query is provided
+            text_match = True
+            if search_query:
+                search_lower = search_query.lower()
+                name = question.get('name', '').lower()
+                content = question.get('content', '').lower()
+                
+                text_match = search_lower in name or search_lower in content
+            
+            # Add question if it matches both tag and text criteria
+            if tags_match and text_match:
+                filtered_questions.append(question)
+        
+        questions = filtered_questions
+    
+    # Sort questions based on sort_by parameter
+    if sort_by == 'rating_asc':
+        questions.sort(key=lambda q: q.get('rating', 0))
+    elif sort_by == 'rating_desc':
+        questions.sort(key=lambda q: q.get('rating', 0), reverse=True)
+    # For 'newest', no sorting needed as it's the default order
+    
     if request.method == 'POST':
-        quiz_name = request.form.get('quiz_name')
-        question_ids = request.form.getlist('question_ids')
+        name = request.form.get('quiz_name', '').strip()
         selected_tags = request.form.getlist('selected_tags')
-
-        if not quiz_name or not question_ids:
-            flash('Quiz name and at least one question are required.', 'danger')
-            return redirect(url_for('create_quiz'))
-
+        question_ids = request.form.getlist('question_ids')
+        
+        if not name:
+            flash('Quiz name is required!', 'error')
+            return render_template('create_quiz.html', 
+                                  questions=questions, 
+                                  all_quiz_tags=quiz_tags,
+                                  all_tags=all_tags,
+                                  filter_tags=filter_tags,
+                                  search_query=search_query,
+                                  sort_by=sort_by)
+        
+        if not question_ids:
+            flash('Please select at least one question for the quiz!', 'error')
+            return render_template('create_quiz.html', 
+                                  questions=questions, 
+                                  all_quiz_tags=quiz_tags,
+                                  all_tags=all_tags,
+                                  filter_tags=filter_tags,
+                                  search_query=search_query,
+                                  sort_by=sort_by)
+        
         quizzes = load_quizzes()
         new_quiz = {
             'id': str(uuid.uuid4()),
-            'name': quiz_name,
-            'question_ids': question_ids,
+            'name': name,
             'tags': selected_tags,
+            'question_ids': question_ids,
+            'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
             'deleted': False
         }
         quizzes.append(new_quiz)
         save_quizzes(quizzes)
-
+        
         flash('Quiz created successfully!', 'success')
         return redirect(url_for('quizzes'))
-
-    questions = load_questions()
-    all_quiz_tags = get_all_quiz_tags()
-    return render_template('create_quiz.html', questions=questions, quiz=None, all_quiz_tags=all_quiz_tags)
+    
+    # For GET requests or if form validation fails
+    return render_template('create_quiz.html', 
+                          questions=questions, 
+                          all_quiz_tags=quiz_tags,
+                          all_tags=all_tags,
+                          filter_tags=filter_tags,
+                          search_query=search_query,
+                          sort_by=sort_by)
 
 @app.route('/quizzes/<quiz_id>/edit', methods=['GET', 'POST'])
 def edit_quiz(quiz_id):
     quizzes = load_quizzes()
-    quiz = next((q for q in quizzes if q['id'] == quiz_id), None)
+    quiz = next((q for q in quizzes if q.get('id') == quiz_id), None)
+    
     if not quiz:
-        flash('Quiz not found.', 'danger')
+        flash('Quiz not found!', 'error')
         return redirect(url_for('quizzes'))
-
+    
+    if quiz.get('deleted'):
+        flash('Cannot edit a deleted quiz!', 'error')
+        return redirect(url_for('quizzes'))
+    
+    all_tags = get_all_tags()
+    all_quiz_tags = get_all_quiz_tags()
+    all_questions = load_questions(include_deleted=True)
+    
+    # Filter out deleted questions for display
+    questions = [q for q in all_questions if not q.get('deleted', False)]
+    
+    # Ensure SVG is generated for all questions
+    for question in questions:
+        if not question.get('svg') or question.get('svg_generated') is False:
+            try:
+                question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+                question['svg_generated'] = True
+            except Exception as e:
+                # If LaTeX compilation fails, use a placeholder image
+                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+                question['svg'] = '/static/img/latex-placeholder.svg'
+                question['svg_generated'] = False
+    
+    # Save questions with generated SVGs
+    save_questions(all_questions)
+    
     if request.method == 'POST':
-        quiz_name = request.form.get('quiz_name')
-        question_ids = request.form.getlist('question_ids')
+        name = request.form.get('quiz_name', '').strip()
         selected_tags = request.form.getlist('selected_tags')
-
-        if not quiz_name or not question_ids:
-            flash('Quiz name and at least one question are required.', 'danger')
-            return redirect(url_for('edit_quiz', quiz_id=quiz_id))
-
-        quiz['name'] = quiz_name
-        quiz['question_ids'] = question_ids
+        question_ids = request.form.getlist('question_ids')
+        
+        if not name:
+            flash('Quiz name is required!', 'error')
+            return render_template('create_quiz.html', 
+                                  quiz=quiz,
+                                  questions=questions, 
+                                  all_quiz_tags=all_quiz_tags,
+                                  all_tags=all_tags)
+        
+        if not question_ids:
+            flash('Please select at least one question for the quiz!', 'error')
+            return render_template('create_quiz.html', 
+                                  quiz=quiz,
+                                  questions=questions, 
+                                  all_quiz_tags=all_quiz_tags,
+                                  all_tags=all_tags)
+        
+        # Update the quiz
+        quiz['name'] = name
         quiz['tags'] = selected_tags
+        quiz['question_ids'] = question_ids
+        
         save_quizzes(quizzes)
-
         flash('Quiz updated successfully!', 'success')
         return redirect(url_for('quizzes'))
-
-    questions = load_questions()
-    all_quiz_tags = get_all_quiz_tags()
-    return render_template('create_quiz.html', questions=questions, quiz=quiz, all_quiz_tags=all_quiz_tags)
+    
+    return render_template('create_quiz.html', 
+                          quiz=quiz, 
+                          questions=questions, 
+                          all_quiz_tags=all_quiz_tags,
+                          all_tags=all_tags)
 
 @app.route('/quizzes/<quiz_id>/attempt')
 def attempt_quiz(quiz_id):
@@ -576,11 +710,38 @@ def attempt_quiz(quiz_id):
     # Ensure svgs are generated
     for question in quiz_questions:
         if not question.get('svg') or question.get('svg_generated') is False:
-            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-            question['svg_generated'] = True
+            try:
+                question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+                question['svg_generated'] = True
+            except Exception as e:
+                # If LaTeX compilation fails, use a placeholder image
+                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+                question['svg'] = '/static/img/latex-placeholder.svg'
+                question['svg_generated'] = False
     save_questions(all_questions)
+    
+    # Calculate progress - only count questions completed in this specific quiz
+    all_submissions = load_submissions()
+    
+    # Get all correct submissions for this quiz
+    correct_submissions = [
+        s for s in all_submissions 
+        if s.get('outcome') == 'Correct' and s.get('quiz_id') == quiz_id
+    ]
+    
+    # Get unique question IDs that have been correctly answered in this quiz
+    completed_question_ids = set(s['question_id'] for s in correct_submissions)
+    
+    # Calculate progress percentage
+    total_questions = len(quiz_questions)
+    completed_count = sum(1 for q in quiz_questions if q['id'] in completed_question_ids)
+    progress = int((completed_count / total_questions) * 100) if total_questions > 0 else 0
 
-    return render_template('attempt_quiz.html', quiz=quiz, questions=quiz_questions)
+    return render_template('attempt_quiz.html', 
+                          quiz=quiz, 
+                          questions=quiz_questions,
+                          progress=progress,
+                          completed_questions=completed_question_ids)
 
 @app.route('/about')
 def about():
@@ -710,22 +871,68 @@ def view_question(question_id):
     questions = load_questions(include_deleted=True)
     question = next((q for q in questions if q.get('id') == question_id), None)
     
+    # Check if we're in quiz creation/editing context
+    creating_quiz = request.args.get('creating_quiz') == 'true'
+    quiz_name = request.args.get('quiz_name', '')
+    selected_quiz_tags = request.args.getlist('selected_quiz_tags')
+    filter_tags = request.args.getlist('filter_tags')
+    search_query = request.args.get('search_query', '')
+    sort_by = request.args.get('sort_by', 'newest')
+    
     if not question:
         flash('Question not found!', 'error')
         return redirect(url_for('index'))
     
     # Generate SVG if it hasn't been generated yet or if it's flagged for regeneration
     if not question.get('svg') or question.get('svg_generated') is False:
-        question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-        question['svg_generated'] = True
+        try:
+            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+            question['svg_generated'] = True
+        except Exception as e:
+            # If LaTeX compilation fails, use a placeholder image
+            app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+            question['svg'] = '/static/img/latex-placeholder.svg'
+            question['svg_generated'] = False
+        
+        # Save the updated questions
         save_questions(questions)
     
-    return render_template('view_question.html', question=question)
+    # Get all tags for accessing the tag display names
+    all_tags = get_all_tags()
+    
+    # Function to get tag by ID for use in the template
+    def get_tag_by_id(tag_id):
+        return next((tag for tag in all_tags if tag['id'] == tag_id), None)
+    
+    return render_template('view_question.html', 
+                          question=question,
+                          creating_quiz=creating_quiz,
+                          quiz_name=quiz_name,
+                          selected_quiz_tags=selected_quiz_tags,
+                          filter_tags=filter_tags,
+                          search_query=search_query,
+                          sort_by=sort_by,
+                          get_tag_by_id=get_tag_by_id)
 
 @app.route('/attempt_question/<question_id>', methods=['GET', 'POST'])
 def attempt_question(question_id):
     questions = load_questions(include_deleted=True)
     question = next((q for q in questions if q.get('id') == question_id), None)
+    
+    # Get quiz context if provided (for attempt quiz feature)
+    quiz_id = request.args.get('quiz_id')
+    quiz = None
+    if quiz_id:
+        quizzes = load_quizzes()
+        quiz = next((q for q in quizzes if q.get('id') == quiz_id), None)
+    
+    # Check if we're in quiz creation/editing context
+    creating_quiz = request.args.get('creating_quiz') == 'true'
+    quiz_name = request.args.get('quiz_name', '')
+    selected_quiz_tags = request.args.getlist('selected_quiz_tags')
+    filter_tags = request.args.getlist('filter_tags')
+    search_query = request.args.get('search_query', '')
+    sort_by = request.args.get('sort_by', 'newest')
     
     if not question:
         flash('Question not found!', 'error')
@@ -734,6 +941,9 @@ def attempt_question(question_id):
     if request.method == 'POST':
         user_answer = request.form.get('answer', '').strip()
         correct_answer = question.get('answer', '').strip()
+        
+        # Get the quiz ID from form if available
+        submission_quiz_id = request.form.get('quiz_id')
         
         # Get the hints that were used from the form
         used_hints = request.form.getlist('used_hints')
@@ -770,18 +980,44 @@ def attempt_question(question_id):
             'verdict': 'Your answer is correct.' if is_correct else 'Your answer is incorrect. Please try again.',
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
             'used_hints': used_hints,  # Keep the raw hint IDs
-            'hint_data': hint_data     # Add the enhanced hint data with positions
+            'hint_data': hint_data,    # Add the enhanced hint data with positions
+            'quiz_id': submission_quiz_id  # Track which quiz this submission is from
         }
         submissions.append(new_submission)
         save_submissions(submissions)
         
         flash(new_submission['verdict'], 'success' if is_correct else 'error')
-        return redirect(url_for('attempt_question', question_id=question_id))
+        
+        # If correct and from a quiz, redirect back to the quiz
+        if is_correct and submission_quiz_id:
+            return redirect(url_for('attempt_quiz', quiz_id=submission_quiz_id))
+        
+        # Pass all the creation context parameters back when redirecting
+        if creating_quiz:
+            return redirect(url_for('attempt_question', 
+                                   question_id=question_id, 
+                                   quiz_id=quiz_id,
+                                   creating_quiz=creating_quiz,
+                                   quiz_name=quiz_name,
+                                   selected_quiz_tags=selected_quiz_tags,
+                                   filter_tags=filter_tags,
+                                   search_query=search_query,
+                                   sort_by=sort_by))
+        else:
+            return redirect(url_for('attempt_question', question_id=question_id, quiz_id=quiz_id))
 
     # Generate SVG if it hasn't been generated yet or if it's flagged for regeneration
     if not question.get('svg') or question.get('svg_generated') is False:
-        question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-        question['svg_generated'] = True
+        try:
+            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+            question['svg_generated'] = True
+        except Exception as e:
+            # If LaTeX compilation fails, use a placeholder image
+            app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+            question['svg'] = '/static/img/latex-placeholder.svg'
+            question['svg_generated'] = False
+            
+        # Save the updated questions
         save_questions(questions)
     
     # Get submissions for this question
@@ -796,7 +1032,17 @@ def attempt_question(question_id):
     def get_tag_by_id(tag_id):
         return next((tag for tag in all_tags if tag['id'] == tag_id), None)
     
-    return render_template('attempt_question.html', question=question, get_tag_by_id=get_tag_by_id, submissions=question_submissions)
+    return render_template('attempt_question.html', 
+                           question=question, 
+                           get_tag_by_id=get_tag_by_id, 
+                           submissions=question_submissions,
+                           quiz_id=quiz_id,
+                           creating_quiz=creating_quiz,
+                           quiz_name=quiz_name,
+                           selected_quiz_tags=selected_quiz_tags,
+                           filter_tags=filter_tags,
+                           search_query=search_query,
+                           sort_by=sort_by)
 
 @app.route('/edit_question/<question_id>', methods=['GET', 'POST'])
 def edit_question(question_id):

@@ -2,37 +2,260 @@
 
 {% block title %}{% if quiz %}Edit Quiz{% else %}Create Quiz{% endif %}{% endblock %}
 
+{% block head %}
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    
+    .card.border-primary {
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1>{% if quiz %}Edit Quiz{% else %}Create New Quiz{% endif %}</h1>
+<div class="row mb-4">
+    <div class="col-md-12">
+        <a href="{{ url_for('quizzes') }}" class="btn btn-outline-secondary mb-3">&larr; Back to Quizzes</a>
+        <h1>{% if quiz %}Edit Quiz{% else %}Create New Quiz{% endif %}</h1>
+    </div>
+</div>
 
-<form method="post">
-    <div class="mb-3">
-        <label for="quiz_name" class="form-label">Quiz Name</label>
-        <input type="text" class="form-control" id="quiz_name" name="quiz_name" value="{{ quiz.name if quiz else '' }}" required>
+<form method="post" id="quiz-form">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="quiz_name" class="form-label">Quiz Name</label>
+                <input type="text" class="form-control" id="quiz_name" name="quiz_name" value="{{ quiz.name if quiz else quiz_name }}" required>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="selected_tags" class="form-label">Quiz Tags</label>
+                <select name="selected_tags" id="selected_tags" class="form-select" multiple size="4">
+                    {% for tag in all_quiz_tags %}
+                        <option value="{{ tag.id }}" 
+                        {% if quiz and tag.id in quiz.tags %}selected
+                        {% elif tag.id in selected_quiz_tags %}selected{% endif %}>
+                            {{ tag.display_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Hold Ctrl/Cmd to select multiple tags</div>
+            </div>
+        </div>
     </div>
 
-    <div class="mb-3">
-        <label for="selected_tags" class="form-label">Quiz Tags</label>
-        <select name="selected_tags" id="selected_tags" class="form-select" multiple size="4">
-            {% for tag in all_quiz_tags %}
-                <option value="{{ tag.id }}" {% if quiz and tag.id in quiz.tags %}selected{% endif %}>{{ tag.display_name }}</option>
-            {% endfor %}
-        </select>
-        <div class="form-text">Hold Ctrl/Cmd to select multiple tags</div>
+    <h2 class="h4 mt-4 mb-3">Select Questions</h2>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Filter & Sort Questions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-12 mb-3">
+                            <label for="question_search" class="form-label">Search Questions:</label>
+                            <input type="text" id="question_search" class="form-control" placeholder="Search by name or content..." value="{{ search_query }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="question_tags" class="form-label">Filter by Tags:</label>
+                            <select id="question_tags" class="form-select" multiple size="4">
+                                {% for tag in all_tags %}
+                                    <option value="{{ tag.id }}" {% if tag.id in filter_tags %}selected{% endif %}>{{ tag.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple tags</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="question_sort" class="form-label">Sort by:</label>
+                            <select id="question_sort" class="form-select">
+                                <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest</option>
+                                <option value="rating_asc" {% if sort_by == 'rating_asc' %}selected{% endif %}>Rating (Low to High)</option>
+                                <option value="rating_desc" {% if sort_by == 'rating_desc' %}selected{% endif %}>Rating (High to Low)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="button" id="applyFilterSort" class="btn btn-primary w-100">Apply</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <h2 class="h4 mt-4">Select Questions</h2>
-    <div class="list-group">
+    <div class="row" id="question-cards-container">
         {% for question in questions %}
-        <label class="list-group-item">
-            <input class="form-check-input me-1" type="checkbox" name="question_ids" value="{{ question.id }}"
-                   {% if quiz and question.id in quiz.question_ids %}checked{% endif %}>
-            {{ question.name or 'Unnamed Question' }}
-        </label>
+        <div class="col-md-6 mb-4 question-card" 
+             data-name="{{ question.name|lower }}" 
+             data-content="{{ question.content|lower }}" 
+             data-rating="{{ question.rating }}"
+             data-tags="{{ question.tags|join(',') }}">
+            <div class="card h-100 {% if quiz and question.id in quiz.question_ids %}border-primary{% endif %}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge bg-primary me-2">Rating: {{ question.rating }}</span>
+                        {% for tag_id in question.tags %}
+                            {% set tag = get_tag_by_id(tag_id) %}
+                            {% if tag %}
+                                <span class="badge bg-secondary">{{ tag.display_name }}</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="question_ids" value="{{ question.id }}" 
+                               id="question_{{ question.id }}" {% if quiz and question.id in quiz.question_ids %}checked{% endif %}>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <label class="w-100 cursor-pointer" for="question_{{ question.id }}">
+                        {% if question.name %}
+                        <h5 class="card-title mb-3">{{ question.name }}</h5>
+                        {% endif %}
+                        <div class="mb-3 text-center">
+                            <img src="{{ question.svg }}" alt="LaTeX formula" class="img-fluid w-100">
+                        </div>
+                    </label>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('view_question', 
+                                           question_id=question.id, 
+                                           creating_quiz='true',
+                                           quiz_name=quiz.name if quiz else quiz_name,
+                                           selected_quiz_tags=quiz.tags if quiz else selected_quiz_tags,
+                                           filter_tags=filter_tags,
+                                           search_query=search_query,
+                                           sort_by=sort_by) }}" 
+                           class="btn btn-sm btn-outline-primary" target="_blank">View Details</a>
+                        <a href="{{ url_for('attempt_question', 
+                                           question_id=question.id, 
+                                           creating_quiz='true',
+                                           quiz_name=quiz.name if quiz else quiz_name,
+                                           selected_quiz_tags=quiz.tags if quiz else selected_quiz_tags,
+                                           filter_tags=filter_tags,
+                                           search_query=search_query,
+                                           sort_by=sort_by) }}" 
+                           class="btn btn-sm btn-success" target="_blank">Attempt</a>
+                    </div>
+                </div>
+            </div>
+        </div>
         {% endfor %}
     </div>
 
-    <button type="submit" class="btn btn-primary mt-3">{% if quiz %}Update Quiz{% else %}Create Quiz{% endif %}</button>
-    <a href="{{ url_for('quizzes') }}" class="btn btn-secondary mt-3">Cancel</a>
+    <div class="mt-4 mb-5">
+        <button type="submit" class="btn btn-primary">{% if quiz %}Update Quiz{% else %}Create Quiz{% endif %}</button>
+        <a href="{{ url_for('quizzes') }}" class="btn btn-secondary">Cancel</a>
+    </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const questionSearch = document.getElementById('question_search');
+        const questionTags = document.getElementById('question_tags');
+        const questionSort = document.getElementById('question_sort');
+        const applyFilterSort = document.getElementById('applyFilterSort');
+        const questionCards = document.querySelectorAll('.question-card');
+        const quizNameInput = document.getElementById('quiz_name');
+        const selectedTagsSelect = document.getElementById('selected_tags');
+        
+        // Apply filters and sorting
+        applyFilterSort.addEventListener('click', function() {
+            filterAndSortQuestions();
+        });
+        
+        // Also apply when pressing Enter in the search field
+        questionSearch.addEventListener('keyup', function(event) {
+            if (event.key === 'Enter') {
+                filterAndSortQuestions();
+            }
+        });
+        
+        function filterAndSortQuestions() {
+            const searchQuery = questionSearch.value.toLowerCase().trim();
+            const selectedTags = Array.from(questionTags.selectedOptions).map(option => option.value);
+            const sortBy = questionSort.value;
+            
+            // First filter the questions
+            questionCards.forEach(card => {
+                const name = card.dataset.name || '';
+                const content = card.dataset.content || '';
+                const cardTags = (card.dataset.tags || '').split(',');
+                
+                let showCard = true;
+                
+                // Apply search filter
+                if (searchQuery && !name.includes(searchQuery) && !content.includes(searchQuery)) {
+                    showCard = false;
+                }
+                
+                // Apply tag filter
+                if (showCard && selectedTags.length > 0) {
+                    const hasMatchingTag = selectedTags.some(tag => cardTags.includes(tag));
+                    if (!hasMatchingTag) {
+                        showCard = false;
+                    }
+                }
+                
+                // Show or hide the card
+                card.style.display = showCard ? '' : 'none';
+            });
+            
+            // Then sort the visible questions
+            const container = document.getElementById('question-cards-container');
+            const visibleCards = Array.from(questionCards).filter(card => card.style.display !== 'none');
+            
+            visibleCards.sort((a, b) => {
+                if (sortBy === 'rating_asc') {
+                    return parseFloat(a.dataset.rating) - parseFloat(b.dataset.rating);
+                } else if (sortBy === 'rating_desc') {
+                    return parseFloat(b.dataset.rating) - parseFloat(a.dataset.rating);
+                } else {
+                    // Default to 'newest' which is the default order (no sorting needed)
+                    return 0;
+                }
+            });
+            
+            // Re-append the cards in the sorted order
+            visibleCards.forEach(card => {
+                container.appendChild(card);
+            });
+            
+            // Update "View Details" and "Attempt" links with the current filters, quiz name, and tags
+            const quizName = quizNameInput.value;
+            const selectedQuizTags = Array.from(selectedTagsSelect.selectedOptions).map(option => option.value);
+            
+            document.querySelectorAll('.card-footer a').forEach(link => {
+                const url = new URL(link.href);
+                url.searchParams.set('quiz_name', quizName);
+                
+                // Clear existing tags
+                url.searchParams.delete('selected_quiz_tags');
+                
+                // Add each tag
+                selectedQuizTags.forEach(tag => {
+                    url.searchParams.append('selected_quiz_tags', tag);
+                });
+                
+                // Set filter tags
+                url.searchParams.delete('filter_tags');
+                selectedTags.forEach(tag => {
+                    url.searchParams.append('filter_tags', tag);
+                });
+                
+                // Set search query and sort
+                url.searchParams.set('search_query', searchQuery);
+                url.searchParams.set('sort_by', sortBy);
+                
+                link.href = url.toString();
+            });
+        }
+    });
+</script>
 {% endblock %} 

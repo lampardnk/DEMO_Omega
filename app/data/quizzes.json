@@ -1,24 +1,13 @@
 [
     {
-        "id": "adeae915-7fc0-47f4-90cb-4f3f4e1f1521",
-        "name": "test quiz",
+        "id": "9cca7d49-2e24-4b91-8d52-0e50fe41bda4",
+        "name": "test",
+        "tags": [],
         "question_ids": [
-            "bf548474-b58d-49c1-a67d-3171bd0637cf"
+            "1fad844e-f30f-4c6f-ba31-b8212a3b6137",
+            "eb45ecc8-8407-4751-bbe5-aea43291e5f5"
         ],
-        "deleted": true
-    },
-    {
-        "id": "d5bb027c-a89f-4c17-a07d-5eea49d54c2e",
-        "name": "Sample",
-        "question_ids": [
-            "q2",
-            "q3",
-            "q4"
-        ],
-        "tags": [
-            "beginner",
-            "practice"
-        ],
-        "deleted": true
+        "created_at": "2025-06-09 10:36:53",
+        "deleted": false
     }
 ]

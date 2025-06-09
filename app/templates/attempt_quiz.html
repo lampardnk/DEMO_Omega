@@ -3,16 +3,30 @@
 {% block title %}Attempt Quiz: {{ quiz.name }}{% endblock %}
 
 {% block content %}
-<h1>{{ quiz.name }}</h1>
+<div class="row mb-4">
+    <div class="col-md-12">
+        <a href="{{ url_for('quizzes') }}" class="btn btn-outline-secondary mb-3">&larr; Back to Quizzes</a>
+        <h1>{{ quiz.name }}</h1>
+    </div>
+</div>
 
-<div class="progress mb-4">
-    <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Quiz Progress</h5>
+                <p class="text-center">
+                    Completed {{ completed_questions|length }} of {{ questions|length }} questions ({{ progress }}%)
+                </p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row">
     {% for question in questions %}
     <div class="col-md-12 mb-4">
-        <div class="card {% if question.deleted %}border-danger{% endif %}">
+        <div class="card {% if question.deleted %}border-danger{% endif %} {% if question.id in completed_questions %}border-success{% endif %}">
             <div class="card-header d-flex justify-content-between">
                 <div>
                     <span class="badge bg-primary me-2">Rating: {{ question.rating }}</span>
@@ -25,6 +39,11 @@
                         {% endif %}
                     {% endfor %}
                 </div>
+                <div>
+                    {% if question.id in completed_questions %}
+                        <span class="badge bg-success">Completed</span>
+                    {% endif %}
+                </div>
             </div>
             <div class="card-body">
                 {% if question.name %}
@@ -33,7 +52,7 @@
                 <div class="mb-3 text-center">
                     <img src="{{ question.svg }}" alt="LaTeX formula" class="img-fluid w-100">
                 </div>
-                <a href="{{ url_for('attempt_question', question_id=question.id) }}" class="btn btn-sm btn-success">Attempt Question</a>
+                <a href="{{ url_for('attempt_question', question_id=question.id, quiz_id=quiz.id) }}" class="btn btn-sm btn-success">Attempt Question</a>
             </div>
         </div>
     </div>

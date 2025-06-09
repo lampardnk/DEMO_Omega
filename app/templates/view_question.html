@@ -19,7 +19,17 @@
 {% endblock %} {% block content %}
 <div class="row mb-4">
     <div class="col-md-12">
+        {% if creating_quiz %}
+        <a href="{{ url_for('create_quiz', 
+                           quiz_name=quiz_name, 
+                           selected_tags=selected_quiz_tags,
+                           filter_tags=filter_tags,
+                           search_query=search_query,
+                           sort_by=sort_by) }}" 
+           class="btn btn-outline-secondary mb-3">&larr; Back to Quiz Creation</a>
+        {% else %}
         <a href="{{ url_for('index') }}" class="btn btn-outline-secondary mb-3">&larr; Back to Questions</a>
+        {% endif %}
         <h1>Question Details</h1>
     </div>
 </div>
@@ -94,10 +104,26 @@
                 </div>
                 {% endif %}
 
-                <div class="d-flex justify-content-end mt-4">
-                    <a href="{{ url_for('edit_question', question_id=question.id) }}" class="btn btn-primary me-2">Edit Question</a>
-
-                    <a href="{{ url_for('delete_question', question_id=question.id) }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this question?');">Delete Question</a>
+                <div class="d-flex justify-content-between mt-4">
+                    <div>
+                        {% if creating_quiz %}
+                        <a href="{{ url_for('attempt_question', 
+                                           question_id=question.id, 
+                                           creating_quiz=creating_quiz,
+                                           quiz_name=quiz_name,
+                                           selected_quiz_tags=selected_quiz_tags,
+                                           filter_tags=filter_tags,
+                                           search_query=search_query,
+                                           sort_by=sort_by) }}" 
+                           class="btn btn-success">Attempt Question</a>
+                        {% else %}
+                        <a href="{{ url_for('attempt_question', question_id=question.id) }}" class="btn btn-success">Attempt Question</a>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <a href="{{ url_for('edit_question', question_id=question.id) }}" class="btn btn-primary me-2">Edit Question</a>
+                        <a href="{{ url_for('delete_question', question_id=question.id) }}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this question?');">Delete Question</a>
+                    </div>
                 </div>
 
                 {% if question.edited_from %}
