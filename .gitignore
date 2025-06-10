@@ -1,2 +1,44 @@
-./app/data/
-./app/uploads/
+# Data and uploads directories
+app/data/
+app/uploads/
+
+# Cache directories
+__pycache__/
+*.py[cod]
+*$py.class
+.cache/
+.pytest_cache/
+node_modules/
+.npm/
+.yarn/
+
+# Hidden folders and files
+.*
+!.gitignore
+!.gitkeep
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build and distribution
+build/
+dist/
+*.egg-info/
