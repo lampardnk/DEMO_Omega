@@ -1,9 +1,5 @@
 [
     {
-        "id": "math",
-        "display_name": "Maths"
-    },
-    {
         "id": "algebra",
         "display_name": "Algebra"
     },
@@ -26,5 +22,9 @@
     {
         "id": "biology",
         "display_name": "Biology"
+    },
+    {
+        "id": "maths",
+        "display_name": "Maths"
     }
 ]

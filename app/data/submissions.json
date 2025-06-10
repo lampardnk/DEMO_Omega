@@ -1,1 +1,119 @@
-[]
+[
+    {
+        "id": "7f7104b0-a692-411c-a3d0-445e6289118a",
+        "question_id": "634a86c5-aa73-45aa-b3dd-5251407bc19a",
+        "user_answer": "tset",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-10 18:20:46",
+        "used_hints": [
+            "ba6681d9-d7d3-4b65-b333-20e457a36b26"
+        ],
+        "hint_data": [
+            {
+                "id": "ba6681d9-d7d3-4b65-b333-20e457a36b26",
+                "position": 1
+            }
+        ],
+        "quiz_id": null
+    },
+    {
+        "id": "5f0c5444-25eb-4474-a761-190816a4545e",
+        "question_id": "634a86c5-aa73-45aa-b3dd-5251407bc19a",
+        "user_answer": "tset",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-10 18:20:54",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": null
+    },
+    {
+        "id": "7f681e3e-4831-4895-be54-f1630c1a5297",
+        "question_id": "634a86c5-aa73-45aa-b3dd-5251407bc19a",
+        "user_answer": "test",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-10 18:20:59",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": null
+    },
+    {
+        "id": "34859d40-6d00-4be1-ab26-bc933bfdabfa",
+        "question_id": "0dffbb65-cd63-4343-8b23-ebe90e23aa3b",
+        "user_answer": "tset",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-10 19:04:21",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": null
+    },
+    {
+        "id": "7d0dc24c-1b59-495d-bbce-0e8498e8a787",
+        "question_id": "0dffbb65-cd63-4343-8b23-ebe90e23aa3b",
+        "user_answer": "test",
+        "outcome": "Incorrect",
+        "verdict": "Your answer is incorrect. Please try again.",
+        "timestamp": "2025-06-10 19:04:25",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": null
+    },
+    {
+        "id": "cfa620d7-e15c-4bde-91a4-b9e786893b7f",
+        "question_id": "0dffbb65-cd63-4343-8b23-ebe90e23aa3b",
+        "user_answer": "d",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-10 19:04:28",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": null
+    },
+    {
+        "id": "ba35ba02-2a36-44ee-a01a-a79a08f7f079",
+        "question_id": "0dffbb65-cd63-4343-8b23-ebe90e23aa3b",
+        "user_answer": "d",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-10 19:05:07",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": "e4e2f013-1f9c-4476-a6dc-6d9412c17494"
+    },
+    {
+        "id": "2cc0f36d-90ad-48b5-aafd-ea3b276d2db5",
+        "question_id": "0dffbb65-cd63-4343-8b23-ebe90e23aa3b",
+        "user_answer": "d",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-10 19:05:19",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": "e4e2f013-1f9c-4476-a6dc-6d9412c17494"
+    },
+    {
+        "id": "7fe3e28c-ca1b-4a17-a380-2923735908d3",
+        "question_id": "f0a81a2b-605b-4bc2-9a01-ad9fcec2b376",
+        "user_answer": "d",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-10 19:05:29",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": "e4e2f013-1f9c-4476-a6dc-6d9412c17494"
+    },
+    {
+        "id": "37a318df-012d-4ea7-95b0-5dc480158669",
+        "question_id": "0dffbb65-cd63-4343-8b23-ebe90e23aa3b",
+        "user_answer": "d",
+        "outcome": "Correct",
+        "verdict": "Your answer is correct.",
+        "timestamp": "2025-06-10 19:05:39",
+        "used_hints": [],
+        "hint_data": [],
+        "quiz_id": "e4e2f013-1f9c-4476-a6dc-6d9412c17494"
+    }
+]

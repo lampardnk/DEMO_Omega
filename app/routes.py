@@ -27,109 +27,202 @@ class DecimalEncoder(json.JSONEncoder):
 LATEX_CACHE = {}
 CACHE_EXPIRY = 3600  # Cache expiry in seconds (1 hour)
 
-def load_questions(include_deleted=False):
-    if os.path.exists(app.config['QUESTIONS_FILE']):
-        with open(app.config['QUESTIONS_FILE'], 'r') as f:
-            questions = json.load(f)
-            if not include_deleted:
-                questions = [q for q in questions if not q.get('deleted', False)]
-            return questions
-    return []
-
-def save_questions(questions):
-    os.makedirs(os.path.dirname(app.config['QUESTIONS_FILE']), exist_ok=True)
-    with open(app.config['QUESTIONS_FILE'], 'w') as f:
-        json.dump(questions, f, indent=4, cls=DecimalEncoder)
-
-def load_submissions():
-    if os.path.exists(app.config['SUBMISSIONS_FILE']):
-        with open(app.config['SUBMISSIONS_FILE'], 'r') as f:
+# Data loading and saving functions
+def load_json_data(file_key, default=None):
+    """Generic function to load JSON data from a file"""
+    file_path = app.config.get(file_key)
+    if file_path and os.path.exists(file_path):
+        with open(file_path, 'r') as f:
             return json.load(f)
-    return []
+    return default or []
 
-def save_submissions(submissions):
-    os.makedirs(os.path.dirname(app.config['SUBMISSIONS_FILE']), exist_ok=True)
-    with open(app.config['SUBMISSIONS_FILE'], 'w') as f:
-        json.dump(submissions, f, indent=4)
+def save_json_data(file_key, data, use_decimal_encoder=False):
+    """Generic function to save JSON data to a file"""
+    file_path = app.config.get(file_key)
+    if file_path:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=4, cls=DecimalEncoder if use_decimal_encoder else None)
 
-def load_quizzes():
-    if os.path.exists(app.config['QUIZZES_FILE']):
-        with open(app.config['QUIZZES_FILE'], 'r') as f:
-            return json.load(f)
-    return []
+# Specific data functions
+load_questions = lambda include_deleted=False: [q for q in load_json_data('QUESTIONS_FILE') if include_deleted or not q.get('deleted', False)]
+save_questions = lambda questions: save_json_data('QUESTIONS_FILE', questions, use_decimal_encoder=True)
+load_submissions = lambda: load_json_data('SUBMISSIONS_FILE')
+save_submissions = lambda submissions: save_json_data('SUBMISSIONS_FILE', submissions)
+load_quizzes = lambda: load_json_data('QUIZZES_FILE')
+save_quizzes = lambda quizzes: save_json_data('QUIZZES_FILE', quizzes)
+load_tags = lambda: load_json_data('TAGS_FILE')
+save_tags = lambda tags: save_json_data('TAGS_FILE', tags)
+load_quiz_tags = lambda: load_json_data('QUIZ_TAGS_FILE')
+save_quiz_tags = lambda tags: save_json_data('QUIZ_TAGS_FILE', tags)
 
-def save_quizzes(quizzes):
-    os.makedirs(os.path.dirname(app.config['QUIZZES_FILE']), exist_ok=True)
-    with open(app.config['QUIZZES_FILE'], 'w') as f:
-        json.dump(quizzes, f, indent=4)
+# Helper functions
+get_item_by_id = lambda items, item_id: next((item for item in items if item.get('id') == item_id), None)
 
-def load_tags():
-    """Load tags from the tags file"""
-    if os.path.exists(app.config['TAGS_FILE']):
-        with open(app.config['TAGS_FILE'], 'r') as f:
-            return json.load(f)
-    return []
+def get_question_or_404(question_id, include_deleted=False):
+    question = get_item_by_id(load_questions(include_deleted=include_deleted), question_id)
+    if not question:
+        flash('Question not found!', 'error')
+    return question
 
-def save_tags(tags):
-    """Save tags to the tags file"""
-    os.makedirs(os.path.dirname(app.config['TAGS_FILE']), exist_ok=True)
-    with open(app.config['TAGS_FILE'], 'w') as f:
-        json.dump(tags, f, indent=4)
+def get_quiz_or_404(quiz_id):
+    quiz = get_item_by_id(load_quizzes(), quiz_id)
+    if not quiz:
+        flash('Quiz not found!', 'error')
+    return quiz
 
-def load_quiz_tags():
-    """Load quiz tags from the quiz tags file"""
-    if os.path.exists(app.config['QUIZ_TAGS_FILE']):
-        with open(app.config['QUIZ_TAGS_FILE'], 'r') as f:
-            return json.load(f)
-    return []
+def update_question_in_list(question_id, updated_question):
+    questions = load_questions(include_deleted=True)
+    for i, q in enumerate(questions):
+        if q.get('id') == question_id:
+            questions[i] = updated_question
+            break
+    save_questions(questions)
 
-def save_quiz_tags(tags):
-    """Save quiz tags to the quiz tags file"""
-    os.makedirs(os.path.dirname(app.config['QUIZ_TAGS_FILE']), exist_ok=True)
-    with open(app.config['QUIZ_TAGS_FILE'], 'w') as f:
-        json.dump(tags, f, indent=4)
+def generate_question_svg(question):
+    """Generate SVG for a single question if needed"""
+    if not question.get('svg') or question.get('svg_generated') is False:
+        try:
+            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
+            question['svg_generated'] = True
+        except Exception as e:
+            app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
+            question['svg'] = '/static/img/latex-placeholder.svg'
+            question['svg_generated'] = False
+        return True
+    return False
 
-def get_all_tags():
-    """Get all tags with their IDs and display names"""
-    return load_tags()
+def generate_question_svgs(questions):
+    """Generate SVGs for questions that need them"""
+    updated = any(generate_question_svg(q) for q in questions)
+    if updated:
+        save_questions(load_questions(include_deleted=True))
 
-def get_tag_by_id(tag_id):
-    """Get a tag by its ID"""
-    tags = load_tags()
-    for tag in tags:
-        if tag['id'] == tag_id:
-            return tag
-    return None
+def validate_hint_data(data):
+    """Validate hint text and weight, return (is_valid, error_message, hint_text, weight)"""
+    if not data:
+        return False, 'Missing data', None, None
+    
+    hint_text = None
+    weight = None
+    
+    # Validate hint text if provided
+    if 'text' in data:
+        hint_text = data['text'].strip()
+        word_count = len(hint_text.split())
+        if word_count > 50:
+            return False, f'Hint text must be 50 words or less (currently {word_count} words)', None, None
+    
+    # Validate weight if provided
+    if 'weight' in data:
+        try:
+            weight = int(data['weight'])
+            if weight < 1 or weight > 10:
+                return False, 'Weight must be between 1 and 10', None, None
+        except ValueError:
+            return False, 'Weight must be an integer', None, None
+    
+    return True, None, hint_text, weight
 
-def get_all_quiz_tags():
-    """Get all quiz tags with their IDs and display names"""
-    return load_quiz_tags()
+def get_question_and_hint(question_id, hint_id=None):
+    """Get question and optionally hint, return (question, hint) or (None, None) if not found"""
+    questions = load_questions(include_deleted=True)
+    question = get_item_by_id(questions, question_id)
+    
+    if not question:
+        return None, None
+    
+    if hint_id:
+        hint = get_item_by_id(question.get('hints', []), hint_id)
+        return question, hint
+    
+    return question, None
 
-def get_quiz_tag_by_id(tag_id):
-    """Get a quiz tag by its ID"""
-    tags = load_quiz_tags()
-    for tag in tags:
-        if tag['id'] == tag_id:
-            return tag
-    return None
+def handle_tag_management(request, load_func, save_func, is_quiz_tags=False):
+    """Generic function to handle tag management operations"""
+    tags = load_func()
+    
+    if request.method == 'GET':
+        return jsonify(tags)
+        
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data or 'display_name' not in data:
+            return jsonify({'success': False, 'error': 'No display name provided'}), 400
+            
+        tag_id = data.get('id', data['display_name'].lower().replace(' ', '_'))
+        
+        if any(tag['id'] == tag_id for tag in tags):
+            return jsonify({'success': False, 'error': 'Tag ID already exists'}), 400
+            
+        new_tag = {'id': tag_id, 'display_name': data['display_name']}
+        tags.append(new_tag)
+        save_func(tags)
+        
+        return jsonify({'success': True, 'tag': new_tag})
+        
+    elif request.method == 'PUT':
+        data = request.get_json()
+        if not data or 'id' not in data or 'display_name' not in data:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+            
+        tag_to_update = get_item_by_id(tags, data['id'])
+        if not tag_to_update:
+            return jsonify({'success': False, 'error': 'Tag not found'}), 404
+            
+        tag_to_update['display_name'] = data['display_name']
+        save_func(tags)
+        
+        return jsonify({'success': True, 'tag': tag_to_update})
+        
+    elif request.method == 'DELETE':
+        data = request.get_json()
+        if not data or 'id' not in data:
+            return jsonify({'success': False, 'error': 'No tag ID provided'}), 400
+            
+        tag_to_delete = get_item_by_id(tags, data['id'])
+        if not tag_to_delete:
+            return jsonify({'success': False, 'error': 'Tag not found'}), 404
+            
+        tags.remove(tag_to_delete)
+        save_func(tags)
+        
+        # Remove tag from related items
+        if is_quiz_tags:
+            # Remove from all quizzes
+            quizzes = load_quizzes()
+            updated = False
+            for quiz in quizzes:
+                if 'tags' in quiz and data['id'] in quiz['tags']:
+                    quiz['tags'].remove(data['id'])
+                    updated = True
+            if updated:
+                save_quizzes(quizzes)
+        else:
+            # Remove from all questions
+            questions = load_questions(include_deleted=True)
+            updated = False
+            for question in questions:
+                if data['id'] in question.get('tags', []):
+                    question['tags'].remove(data['id'])
+                    updated = True
+            if updated:
+                save_questions(questions)
+        
+        return jsonify({'success': True})
 
-def get_tag_display_name(tag_id):
-    """Get the display name for a tag ID"""
-    tag = get_tag_by_id(tag_id)
-    return tag['display_name'] if tag else tag_id
+# Tag functions
+get_all_tags = load_tags
+get_tag_by_id = lambda tag_id: get_item_by_id(load_tags(), tag_id)
+get_all_quiz_tags = load_quiz_tags
+get_quiz_tag_by_id = lambda tag_id: get_item_by_id(load_quiz_tags(), tag_id)
+get_tag_display_name = lambda tag_id: (get_tag_by_id(tag_id) or {}).get('display_name', tag_id)
+get_quiz_tag_display_name = lambda tag_id: (get_quiz_tag_by_id(tag_id) or {}).get('display_name', tag_id)
 
-def get_quiz_tag_display_name(tag_id):
-    """Get the display name for a quiz tag ID"""
-    tag = get_quiz_tag_by_id(tag_id)
-    return tag['display_name'] if tag else tag_id
-
-def get_latex_cache_key(latex_string):
-    """Generate a cache key for LaTeX content"""
-    return hashlib.md5(latex_string.encode('utf-8')).hexdigest()
+get_latex_cache_key = lambda latex_string: hashlib.md5(latex_string.encode('utf-8')).hexdigest()
 
 def latex_to_svg(latex_string):
     """Convert LaTeX to SVG using command line tools with caching."""
-    # Check cache first
     cache_key = get_latex_cache_key(latex_string)
     current_time = time.time()
     
@@ -139,126 +232,57 @@ def latex_to_svg(latex_string):
         if current_time - cached_item['timestamp'] < CACHE_EXPIRY:
             return cached_item['svg']
     
-    # Not in cache or expired, generate SVG
+    # Generate SVG and cache it
     svg_data = _generate_latex_svg(latex_string)
+    LATEX_CACHE[cache_key] = {'svg': svg_data, 'timestamp': current_time}
     
-    # Store in cache
-    LATEX_CACHE[cache_key] = {
-        'svg': svg_data,
-        'timestamp': current_time
-    }
-    
-    # Clean old cache entries
-    _clean_latex_cache()
+    # Clean expired entries
+    for k in [k for k, v in LATEX_CACHE.items() if current_time - v['timestamp'] > CACHE_EXPIRY]:
+        del LATEX_CACHE[k]
     
     return svg_data
 
-def _clean_latex_cache():
-    """Remove expired items from the LaTeX cache"""
-    current_time = time.time()
-    expired_keys = [k for k, v in LATEX_CACHE.items() 
-                   if current_time - v['timestamp'] > CACHE_EXPIRY]
-    
-    for key in expired_keys:
-        del LATEX_CACHE[key]
-
 def _generate_latex_svg(latex_string):
     """Internal function to generate SVG from LaTeX without caching."""
-    # Create a temporary directory for processing
+    def create_error_svg(error_message):
+        error_svg = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100" viewBox="0 0 500 100">
+    <rect width="500" height="100" fill="#f8d7da" stroke="#f5c6cb" stroke-width="1" rx="5" ry="5"/>
+    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="14" fill="#721c24">
+        {error_message}
+    </text>
+</svg>'''
+        return f"data:image/svg+xml;base64,{base64.b64encode(error_svg.encode()).decode('ascii')}"
+
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Write the LaTeX content to a temporary file, adding extra newlines for safety
         tex_file = os.path.join(temp_dir, "content.tex")
         with open(tex_file, "w") as f:
             f.write(latex_string + "\n\n")
         
         try:
-            # Run pdflatex to create PDF
+            # Run pdflatex
             result = subprocess.run(
                 ["pdflatex", "-shell-escape", "-interaction=nonstopmode", "-output-directory", temp_dir, tex_file],
-                check=False,  # Don't raise exception on non-zero exit
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+                check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
             
-            # Check if pdflatex succeeded
             if result.returncode != 0:
-                # Try to extract the error message from the log
-                log_file = os.path.join(temp_dir, "content.log")
-                error_message = "LaTeX compilation failed"
-                
-                if os.path.exists(log_file):
-                    with open(log_file, 'r') as f:
-                        log_content = f.read()
-                        # Extract error message from the log
-                        error_patterns = [
-                            r'! (.+?)\n',  # Common error pattern
-                            r'! LaTeX Error: (.+?)\n',  # LaTeX specific error
-                            r'! Package (.+?) Error: (.+?)\n'  # Package error
-                        ]
-                        
-                        for pattern in error_patterns:
-                            matches = re.findall(pattern, log_content)
-                            if matches:
-                                if isinstance(matches[0], tuple):
-                                    error_message = ': '.join(matches[0])
-                                else:
-                                    error_message = matches[0]
-                                break
-                
-                raise subprocess.CalledProcessError(
-                    result.returncode, 
-                    result.args, 
-                    output=result.stdout, 
-                    stderr=error_message
-                )
+                return create_error_svg("LaTeX compilation failed")
             
-            # Convert PDF to SVG using pdf2svg
+            # Convert PDF to SVG
             pdf_file = os.path.join(temp_dir, "content.pdf")
             svg_file = os.path.join(temp_dir, "content.svg")
             
             if os.path.exists(pdf_file):
-                svg_result = subprocess.run(
-                    ["pdf2svg", pdf_file, svg_file],
-                    check=True,
-                stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-            )
-            
-                # Read the SVG file
+                subprocess.run(["pdf2svg", pdf_file, svg_file], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 with open(svg_file, "r") as f:
                     svg_content = f.read()
-            
-                # Return base64 encoded SVG
-                base64_data = base64.b64encode(svg_content.encode()).decode("ascii")
-                return f"data:image/svg+xml;base64,{base64_data}"
+                return f"data:image/svg+xml;base64,{base64.b64encode(svg_content.encode()).decode('ascii')}"
             else:
-                raise FileNotFoundError("PDF file was not created")
+                return create_error_svg("PDF file was not created")
             
-        except subprocess.CalledProcessError as e:
-            # If compilation fails, provide an error message with the actual error
-            error_message = f"LaTeX error: {e.stderr}"
-            error_svg = f'''<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100" viewBox="0 0 500 100">
-    <rect width="500" height="100" fill="#f8d7da" stroke="#f5c6cb" stroke-width="1" rx="5" ry="5"/>
-    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="14" fill="#721c24">
-        {error_message}
-    </text>
-</svg>'''
-            base64_data = base64.b64encode(error_svg.encode()).decode("ascii")
-            return f"data:image/svg+xml;base64,{base64_data}"
-        except (FileNotFoundError, OSError) as e:
-            # If tools are missing or other system errors
-            error_message = f"System error: {str(e)}"
-            error_svg = f'''<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100" viewBox="0 0 500 100">
-    <rect width="500" height="100" fill="#f8d7da" stroke="#f5c6cb" stroke-width="1" rx="5" ry="5"/>
-    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="14" fill="#721c24">
-        {error_message}
-    </text>
-</svg>'''
-            base64_data = base64.b64encode(error_svg.encode()).decode("ascii")
-            return f"data:image/svg+xml;base64,{base64_data}"
+        except Exception as e:
+            return create_error_svg(f"Error: {str(e)}")
 
 # New function to ensure a complete LaTeX document
 def ensure_complete_latex_document(latex_content):
@@ -435,23 +459,8 @@ def questionbank():
     elif sort_by == 'newest':
         questions.sort(key=lambda x: x.get('id', 0), reverse=True)
     
-    # Check for any questions that need SVG generation
-    updated = False
-    for question in questions:
-        if not question.get('svg') or question.get('svg_generated') is False:
-            try:
-                question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-                question['svg_generated'] = True
-            except Exception as e:
-                # If LaTeX compilation fails, use a placeholder image
-                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
-                question['svg'] = '/static/img/latex-placeholder.svg'
-                question['svg_generated'] = False
-            updated = True
-    
-    # Save the updated questions if any SVGs were generated
-    if updated:
-        save_questions(load_questions(include_deleted=True))
+    # Generate SVGs for questions that need them
+    generate_question_svgs(questions)
     
     # Get all tags for the filter dropdown
     all_tags = get_all_tags()
@@ -524,19 +533,8 @@ def create_quiz():
     # Filter out deleted questions for display by default
     questions = [q for q in all_questions if not q.get('deleted', False)]
     
-    # Ensure SVG is generated for all questions
-    for question in questions:
-        if not question.get('svg') or question.get('svg_generated') is False:
-            try:
-                question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-                question['svg_generated'] = True
-            except Exception as e:
-                # If LaTeX compilation fails, use a placeholder image
-                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
-                question['svg'] = '/static/img/latex-placeholder.svg'
-                question['svg_generated'] = False
-    
-    # Save questions with generated SVGs
+    # Generate SVGs for questions
+    generate_question_svgs(questions)
     save_questions(all_questions)
     
     # Apply search and tag filters if provided
@@ -577,25 +575,18 @@ def create_quiz():
         selected_tags = request.form.getlist('selected_tags')
         question_ids = request.form.getlist('question_ids')
         
+        template_args = {
+            'questions': questions, 'all_quiz_tags': quiz_tags, 'all_tags': all_tags,
+            'filter_tags': filter_tags, 'search_query': search_query, 'sort_by': sort_by
+        }
+        
         if not name:
             flash('Quiz name is required!', 'error')
-            return render_template('create_quiz.html', 
-                                  questions=questions, 
-                                  all_quiz_tags=quiz_tags,
-                                  all_tags=all_tags,
-                                  filter_tags=filter_tags,
-                                  search_query=search_query,
-                                  sort_by=sort_by)
+            return render_template('create_quiz.html', **template_args)
         
         if not question_ids:
             flash('Please select at least one question for the quiz!', 'error')
-            return render_template('create_quiz.html', 
-                                  questions=questions, 
-                                  all_quiz_tags=quiz_tags,
-                                  all_tags=all_tags,
-                                  filter_tags=filter_tags,
-                                  search_query=search_query,
-                                  sort_by=sort_by)
+            return render_template('create_quiz.html', **template_args)
         
         quizzes = load_quizzes()
         new_quiz = {
@@ -614,12 +605,8 @@ def create_quiz():
     
     # For GET requests or if form validation fails
     return render_template('create_quiz.html', 
-                          questions=questions, 
-                          all_quiz_tags=quiz_tags,
-                          all_tags=all_tags,
-                          filter_tags=filter_tags,
-                          search_query=search_query,
-                          sort_by=sort_by)
+                          questions=questions, all_quiz_tags=quiz_tags, all_tags=all_tags,
+                          filter_tags=filter_tags, search_query=search_query, sort_by=sort_by)
 
 @app.route('/quizzes/<quiz_id>/edit', methods=['GET', 'POST'])
 def edit_quiz(quiz_id):
@@ -641,19 +628,8 @@ def edit_quiz(quiz_id):
     # Filter out deleted questions for display
     questions = [q for q in all_questions if not q.get('deleted', False)]
     
-    # Ensure SVG is generated for all questions
-    for question in questions:
-        if not question.get('svg') or question.get('svg_generated') is False:
-            try:
-                question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-                question['svg_generated'] = True
-            except Exception as e:
-                # If LaTeX compilation fails, use a placeholder image
-                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
-                question['svg'] = '/static/img/latex-placeholder.svg'
-                question['svg_generated'] = False
-    
-    # Save questions with generated SVGs
+    # Generate SVGs for questions
+    generate_question_svgs(questions)
     save_questions(all_questions)
     
     if request.method == 'POST':
@@ -661,21 +637,15 @@ def edit_quiz(quiz_id):
         selected_tags = request.form.getlist('selected_tags')
         question_ids = request.form.getlist('question_ids')
         
+        template_args = {'quiz': quiz, 'questions': questions, 'all_quiz_tags': all_quiz_tags, 'all_tags': all_tags}
+        
         if not name:
             flash('Quiz name is required!', 'error')
-            return render_template('create_quiz.html', 
-                                  quiz=quiz,
-                                  questions=questions, 
-                                  all_quiz_tags=all_quiz_tags,
-                                  all_tags=all_tags)
+            return render_template('create_quiz.html', **template_args)
         
         if not question_ids:
             flash('Please select at least one question for the quiz!', 'error')
-            return render_template('create_quiz.html', 
-                                  quiz=quiz,
-                                  questions=questions, 
-                                  all_quiz_tags=all_quiz_tags,
-                                  all_tags=all_tags)
+            return render_template('create_quiz.html', **template_args)
         
         # Update the quiz
         quiz['name'] = name
@@ -687,10 +657,7 @@ def edit_quiz(quiz_id):
         return redirect(url_for('quizzes'))
     
     return render_template('create_quiz.html', 
-                          quiz=quiz, 
-                          questions=questions, 
-                          all_quiz_tags=all_quiz_tags,
-                          all_tags=all_tags)
+                          quiz=quiz, questions=questions, all_quiz_tags=all_quiz_tags, all_tags=all_tags)
 
 @app.route('/quizzes/<quiz_id>/attempt')
 def attempt_quiz(quiz_id):
@@ -708,17 +675,8 @@ def attempt_quiz(quiz_id):
     all_questions = load_questions(include_deleted=True)
     quiz_questions = [q for q in all_questions if q['id'] in quiz['question_ids']]
     
-    # Ensure svgs are generated
-    for question in quiz_questions:
-        if not question.get('svg') or question.get('svg_generated') is False:
-            try:
-                question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-                question['svg_generated'] = True
-            except Exception as e:
-                # If LaTeX compilation fails, use a placeholder image
-                app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
-                question['svg'] = '/static/img/latex-placeholder.svg'
-                question['svg_generated'] = False
+    # Generate SVGs for questions
+    generate_question_svgs(quiz_questions)
     save_questions(all_questions)
     
     # Calculate progress - only count questions completed in this specific quiz
@@ -932,8 +890,9 @@ def add_question():
 
 @app.route('/question/<question_id>')
 def view_question(question_id):
-    questions = load_questions(include_deleted=True)
-    question = next((q for q in questions if q.get('id') == question_id), None)
+    question = get_question_or_404(question_id, include_deleted=True)
+    if not question:
+        return redirect(url_for('index'))
     
     # Check if we're in quiz creation/editing context
     creating_quiz = request.args.get('creating_quiz') == 'true'
@@ -943,52 +902,26 @@ def view_question(question_id):
     search_query = request.args.get('search_query', '')
     sort_by = request.args.get('sort_by', 'newest')
     
-    if not question:
-        flash('Question not found!', 'error')
-        return redirect(url_for('index'))
-    
-    # Generate SVG if it hasn't been generated yet or if it's flagged for regeneration
-    if not question.get('svg') or question.get('svg_generated') is False:
-        try:
-            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-            question['svg_generated'] = True
-        except Exception as e:
-            # If LaTeX compilation fails, use a placeholder image
-            app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
-            question['svg'] = '/static/img/latex-placeholder.svg'
-            question['svg_generated'] = False
-        
-        # Save the updated questions
-        save_questions(questions)
-    
-    # Get all tags for accessing the tag display names
-    all_tags = get_all_tags()
-    
-    # Function to get tag by ID for use in the template
-    def get_tag_by_id(tag_id):
-        return next((tag for tag in all_tags if tag['id'] == tag_id), None)
+    # Generate SVG if needed
+    if generate_question_svg(question):
+        update_question_in_list(question_id, question)
     
     return render_template('view_question.html', 
-                          question=question,
-                          creating_quiz=creating_quiz,
-                          quiz_name=quiz_name,
-                          selected_quiz_tags=selected_quiz_tags,
-                          filter_tags=filter_tags,
-                          search_query=search_query,
-                          sort_by=sort_by,
-                          get_tag_by_id=get_tag_by_id)
+                          question=question, creating_quiz=creating_quiz, quiz_name=quiz_name,
+                          selected_quiz_tags=selected_quiz_tags, filter_tags=filter_tags,
+                          search_query=search_query, sort_by=sort_by, get_tag_by_id=get_tag_by_id)
 
 @app.route('/attempt_question/<question_id>', methods=['GET', 'POST'])
 def attempt_question(question_id):
-    questions = load_questions(include_deleted=True)
-    question = next((q for q in questions if q.get('id') == question_id), None)
+    question = get_question_or_404(question_id, include_deleted=True)
+    if not question:
+        return redirect(url_for('index'))
     
     # Get quiz context if provided (for attempt quiz feature)
     quiz_id = request.args.get('quiz_id')
     quiz = None
     if quiz_id:
-        quizzes = load_quizzes()
-        quiz = next((q for q in quizzes if q.get('id') == quiz_id), None)
+        quiz = get_quiz_or_404(quiz_id)
     
     # Check if we're in quiz creation/editing context
     creating_quiz = request.args.get('creating_quiz') == 'true'
@@ -997,10 +930,6 @@ def attempt_question(question_id):
     filter_tags = request.args.getlist('filter_tags')
     search_query = request.args.get('search_query', '')
     sort_by = request.args.get('sort_by', 'newest')
-    
-    if not question:
-        flash('Question not found!', 'error')
-        return redirect(url_for('index'))
 
     if request.method == 'POST':
         user_answer = request.form.get('answer', '').strip()
@@ -1070,51 +999,25 @@ def attempt_question(question_id):
         else:
             return redirect(url_for('attempt_question', question_id=question_id, quiz_id=quiz_id))
 
-    # Generate SVG if it hasn't been generated yet or if it's flagged for regeneration
-    if not question.get('svg') or question.get('svg_generated') is False:
-        try:
-            question['svg'] = latex_to_svg(ensure_complete_latex_document(question['content']))
-            question['svg_generated'] = True
-        except Exception as e:
-            # If LaTeX compilation fails, use a placeholder image
-            app.logger.error(f"Error generating SVG for question {question.get('id')}: {str(e)}")
-            question['svg'] = '/static/img/latex-placeholder.svg'
-            question['svg_generated'] = False
-            
-        # Save the updated questions
-        save_questions(questions)
+    # Generate SVG if needed
+    if generate_question_svg(question):
+        update_question_in_list(question_id, question)
     
     # Get submissions for this question
     all_submissions = load_submissions()
     question_submissions = [s for s in all_submissions if s['question_id'] == question_id]
     question_submissions.sort(key=lambda x: x['timestamp'], reverse=True)
 
-    # Get all tags for accessing the tag display names
-    all_tags = get_all_tags()
-    
-    # Function to get tag by ID for use in the template
-    def get_tag_by_id(tag_id):
-        return next((tag for tag in all_tags if tag['id'] == tag_id), None)
-    
     return render_template('attempt_question.html', 
-                           question=question, 
-                           get_tag_by_id=get_tag_by_id, 
-                           submissions=question_submissions,
-                           quiz_id=quiz_id,
-                           creating_quiz=creating_quiz,
-                           quiz_name=quiz_name,
-                           selected_quiz_tags=selected_quiz_tags,
-                           filter_tags=filter_tags,
-                           search_query=search_query,
-                           sort_by=sort_by)
+                           question=question, get_tag_by_id=get_tag_by_id, submissions=question_submissions,
+                           quiz_id=quiz_id, creating_quiz=creating_quiz, quiz_name=quiz_name,
+                           selected_quiz_tags=selected_quiz_tags, filter_tags=filter_tags,
+                           search_query=search_query, sort_by=sort_by)
 
 @app.route('/edit_question/<question_id>', methods=['GET', 'POST'])
 def edit_question(question_id):
-    questions = load_questions(include_deleted=True)
-    question = next((q for q in questions if q.get('id') == question_id), None)
-    
+    question = get_question_or_404(question_id, include_deleted=True)
     if not question:
-        flash('Question not found!', 'error')
         return redirect(url_for('questionbank'))
     
     form = QuestionForm()
@@ -1198,25 +1101,45 @@ def edit_question(question_id):
             valid_files = [f for f in files if f and f.filename]
             
             # Validate files against limits
-            # First, count existing files that are being kept
-            existing_pdfs = sum(1 for a in kept_attachments if a.get('category', '') == 'pdf')
-            existing_videos = sum(1 for a in kept_attachments if a.get('category', '') == 'video')
-            existing_images = sum(1 for a in kept_attachments if a.get('category', '') == 'image')
+            # Count existing files that are being kept
+            existing_counts = {'pdf': 0, 'video': 0, 'image': 0}
+            for a in kept_attachments:
+                category = a.get('category', '')
+                if category in existing_counts:
+                    existing_counts[category] += 1
             
-            # Create a combined list for validation
-            all_files = valid_files + [
-                type('obj', (object,), {
-                    'filename': a.get('original_filename', ''),
-                })
-                for a in kept_attachments
-            ]
+            # Count new files
+            new_counts = {'pdf': 0, 'video': 0, 'image': 0}
+            for file in valid_files:
+                extension = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+                if extension == 'pdf':
+                    new_counts['pdf'] += 1
+                elif extension in ['webm', 'mp4']:
+                    new_counts['video'] += 1
+                elif extension in ['png', 'jpg', 'jpeg']:
+                    new_counts['image'] += 1
             
-            # Validate all files together
-            is_valid, error_message = validate_file_uploads(all_files)
-            if not is_valid:
-                flash(error_message, 'error')
+            # Check total counts
+            total_files = len(kept_attachments) + len(valid_files)
+            if total_files > 4:
+                flash("Maximum 4 files can be uploaded", 'error')
                 return render_template('edit_question.html', form=form, attachment_form=attachment_form, 
                                       question=question, all_tags=all_tags)
+            
+            # Check individual type limits
+            for file_type in ['pdf', 'video', 'image']:
+                if existing_counts[file_type] + new_counts[file_type] > 1:
+                    flash(f"Only 1 {file_type} file is allowed", 'error')
+                    return render_template('edit_question.html', form=form, attachment_form=attachment_form, 
+                                          question=question, all_tags=all_tags)
+            
+            # Validate new files only (existing files were already validated)
+            if valid_files:
+                is_valid, error_message = validate_file_uploads(valid_files)
+                if not is_valid:
+                    flash(error_message, 'error')
+                    return render_template('edit_question.html', form=form, attachment_form=attachment_form, 
+                                          question=question, all_tags=all_tags)
             
             # Process new uploads
             for file in valid_files:
@@ -1229,6 +1152,7 @@ def edit_question(question_id):
                     return render_template('edit_question.html', form=form, attachment_form=attachment_form, 
                                           question=question, all_tags=all_tags)
         
+        questions = load_questions(include_deleted=True)
         questions.append(new_question)
         save_questions(questions)
         flash('Question updated successfully!', 'success')
@@ -1238,26 +1162,20 @@ def edit_question(question_id):
 
 @app.route('/delete_question/<question_id>', methods=['GET', 'POST'])
 def delete_question(question_id):
-    questions = load_questions(include_deleted=True)
-    question = next((q for q in questions if q.get('id') == question_id), None)
+    question = get_question_or_404(question_id, include_deleted=True)
     
-    if not question:
-        flash('Question not found!', 'error')
-    else:
+    if question:
         # Mark the question as deleted instead of removing it
         question['deleted'] = True
-        save_questions(questions)
+        update_question_in_list(question_id, question)
         flash('Question deleted successfully!', 'success')
     
     return redirect(url_for('questionbank'))
 
 @app.route('/download/<question_id>/<attachment_id>')
 def download_attachment(question_id, attachment_id):
-    questions = load_questions(include_deleted=True)
-    question = next((q for q in questions if q.get('id') == question_id), None)
-    
+    question = get_question_or_404(question_id, include_deleted=True)
     if not question:
-        flash('Question not found!', 'error')
         return redirect(url_for('index'))
     
     attachment = next((a for a in question.get('attachments', []) if a.get('id') == attachment_id), None)
@@ -1282,11 +1200,8 @@ def download_attachment(question_id, attachment_id):
 
 @app.route('/remove_attachment/<question_id>/<attachment_id>', methods=['POST'])
 def remove_attachment(question_id, attachment_id):
-    questions = load_questions(include_deleted=True)
-    question = next((q for q in questions if q.get('id') == question_id), None)
-    
+    question = get_question_or_404(question_id, include_deleted=True)
     if not question:
-        flash('Question not found!', 'error')
         return redirect(url_for('index'))
     
     # Remove the attachment from the question
@@ -1302,7 +1217,7 @@ def remove_attachment(question_id, attachment_id):
             if os.path.exists(file_path):
                 os.remove(file_path)
         
-        save_questions(questions)
+        update_question_in_list(question_id, question)
         flash('Attachment removed successfully!', 'success')
     else:
         flash('Attachment not found!', 'error')
@@ -1312,81 +1227,7 @@ def remove_attachment(question_id, attachment_id):
 @app.route('/api/tags', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_tags():
     """API endpoint to manage tags"""
-    tags = load_tags()
-    
-    if request.method == 'GET':
-        # Return all tags
-        return jsonify(tags)
-        
-    elif request.method == 'POST':
-        # Add a new tag
-        data = request.get_json()
-        if not data or 'display_name' not in data:
-            return jsonify({'success': False, 'error': 'No display name provided'}), 400
-            
-        # Create a safe ID from the display name
-        tag_id = data.get('id', data['display_name'].lower().replace(' ', '_'))
-        
-        # Check if the tag already exists
-        if any(tag['id'] == tag_id for tag in tags):
-            return jsonify({'success': False, 'error': 'Tag ID already exists'}), 400
-            
-        # Add the new tag
-        new_tag = {
-            'id': tag_id,
-            'display_name': data['display_name']
-        }
-        tags.append(new_tag)
-        save_tags(tags)
-        
-        return jsonify({'success': True, 'tag': new_tag})
-        
-    elif request.method == 'PUT':
-        # Update a tag's display name
-        data = request.get_json()
-        if not data or 'id' not in data or 'display_name' not in data:
-            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
-            
-        # Find the tag to update
-        tag_to_update = next((tag for tag in tags if tag['id'] == data['id']), None)
-        if not tag_to_update:
-            return jsonify({'success': False, 'error': 'Tag not found'}), 404
-            
-        # Update the display name
-        tag_to_update['display_name'] = data['display_name']
-        save_tags(tags)
-        
-        return jsonify({'success': True, 'tag': tag_to_update})
-        
-    elif request.method == 'DELETE':
-        # Delete a tag
-        data = request.get_json()
-        if not data or 'id' not in data:
-            return jsonify({'success': False, 'error': 'No tag ID provided'}), 400
-            
-        # Check if the tag exists
-        tag_to_delete = next((tag for tag in tags if tag['id'] == data['id']), None)
-        if not tag_to_delete:
-            return jsonify({'success': False, 'error': 'Tag not found'}), 404
-            
-        # Remove the tag
-        tags.remove(tag_to_delete)
-        save_tags(tags)
-        
-        # Also need to remove this tag from all questions
-        questions = load_questions(include_deleted=True)
-        updated = False
-        for question in questions:
-            if data['id'] in question.get('tags', []):
-                question['tags'].remove(data['id'])
-                updated = True
-        
-        if updated:
-            save_questions(questions)
-            
-        return jsonify({'success': True})
-    
-    return jsonify({'success': False, 'error': 'Invalid request method'}), 405
+    return handle_tag_management(request, load_tags, save_tags)
 
 # Make tag helper functions available in templates
 @app.context_processor
@@ -1398,67 +1239,42 @@ def inject_tag_helpers():
         'get_quiz_tag_display_name': get_quiz_tag_display_name
     }
 
-def allowed_file(filename):
-    """Check if the file extension is allowed"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+allowed_file = lambda filename: '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def validate_file_uploads(files):
-    """
-    Validate file uploads against the defined limits:
-    - at most 1 pdf
-    - at most 1 webm OR mp4 
-    - at most 1 png, jpg, or jpeg
-    - at most 4 files in total
-    
-    Returns a tuple of (is_valid, error_message)
-    """
+    """Validate file uploads against limits: max 1 pdf, 1 video, 1 image, 4 total files"""
     if len(files) > 4:
         return False, "Maximum 4 files can be uploaded"
     
-    # Count file types
-    pdf_count = 0
-    video_count = 0
-    image_count = 0
-    
-    # Total file size
+    counts = {'pdf': 0, 'video': 0, 'image': 0}
     total_size = 0
     
     for file in files:
         if not file or not file.filename:
             continue
         
-        # Get file extension
         extension = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-        
         if not extension or extension not in app.config['ALLOWED_EXTENSIONS']:
             return False, f"File type {extension} is not allowed"
         
-        # Check file size (in bytes)
+        # Check file size
         file.seek(0, os.SEEK_END)
-        file_size = file.tell()
-        file.seek(0)  # Reset file pointer
+        total_size += file.tell()
+        file.seek(0)
         
-        total_size += file_size
-        
-        # Count by file type
+        # Count by type
         if extension == 'pdf':
-            pdf_count += 1
+            counts['pdf'] += 1
         elif extension in ['webm', 'mp4']:
-            video_count += 1
+            counts['video'] += 1
         elif extension in ['png', 'jpg', 'jpeg']:
-            image_count += 1
+            counts['image'] += 1
     
     # Validate counts
-    if pdf_count > 1:
-        return False, "Only 1 PDF file is allowed"
+    for file_type, count in counts.items():
+        if count > 1:
+            return False, f"Only 1 {file_type} file is allowed"
     
-    if video_count > 1:
-        return False, "Only 1 video file (webm or mp4) is allowed"
-    
-    if image_count > 1:
-        return False, "Only 1 image file (png, jpg, or jpeg) is allowed"
-    
-    # Max total size (100MB)
     if total_size > app.config['MAX_CONTENT_LENGTH']:
         return False, f"Total file size must be less than {app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)}MB"
     
@@ -1472,24 +1288,13 @@ def add_hint(question_id):
         if not data or 'text' not in data or 'weight' not in data:
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
 
-        # Validate hint text - maximum 50 words
-        hint_text = data['text'].strip()
-        word_count = len(hint_text.split())
-        if word_count > 50:
-            return jsonify({'success': False, 'error': f'Hint text must be 50 words or less (currently {word_count} words)'}), 400
+        # Validate hint data
+        is_valid, error_msg, hint_text, weight = validate_hint_data(data)
+        if not is_valid:
+            return jsonify({'success': False, 'error': error_msg}), 400
 
-        # Validate weight - must be integer between 1 and 10
-        try:
-            weight = int(data['weight'])
-            if weight < 1 or weight > 10:
-                return jsonify({'success': False, 'error': 'Weight must be between 1 and 10'}), 400
-        except ValueError:
-            return jsonify({'success': False, 'error': 'Weight must be an integer'}), 400
-
-        # Load questions and find the target question
-        questions = load_questions(include_deleted=True)
-        question = next((q for q in questions if q.get('id') == question_id), None)
-        
+        # Get the question
+        question, _ = get_question_and_hint(question_id)
         if not question:
             return jsonify({'success': False, 'error': 'Question not found'}), 404
 
@@ -1504,7 +1309,7 @@ def add_hint(question_id):
         if 'hints' not in question:
             question['hints'] = []
         question['hints'].append(new_hint)
-        save_questions(questions)
+        update_question_in_list(question_id, question)
 
         return jsonify({
             'success': True,
@@ -1521,31 +1326,15 @@ def update_hint(question_id, hint_id):
         if not data or ('text' not in data and 'weight' not in data):
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
 
-        # Validate hint text if provided - maximum 50 words
-        if 'text' in data:
-            hint_text = data['text'].strip()
-            word_count = len(hint_text.split())
-            if word_count > 50:
-                return jsonify({'success': False, 'error': f'Hint text must be 50 words or less (currently {word_count} words)'}), 400
+        # Validate hint data
+        is_valid, error_msg, hint_text, weight = validate_hint_data(data)
+        if not is_valid:
+            return jsonify({'success': False, 'error': error_msg}), 400
 
-        # Validate weight if provided - must be integer between 1 and 10
-        if 'weight' in data:
-            try:
-                weight = int(data['weight'])
-                if weight < 1 or weight > 10:
-                    return jsonify({'success': False, 'error': 'Weight must be between 1 and 10'}), 400
-            except ValueError:
-                return jsonify({'success': False, 'error': 'Weight must be an integer'}), 400
-
-        # Load questions and find the target question
-        questions = load_questions(include_deleted=True)
-        question = next((q for q in questions if q.get('id') == question_id), None)
-        
+        # Get the question and hint
+        question, hint = get_question_and_hint(question_id, hint_id)
         if not question:
             return jsonify({'success': False, 'error': 'Question not found'}), 404
-
-        # Find the hint to update
-        hint = next((h for h in question.get('hints', []) if h.get('id') == hint_id), None)
         if not hint:
             return jsonify({'success': False, 'error': 'Hint not found'}), 404
 
@@ -1555,7 +1344,7 @@ def update_hint(question_id, hint_id):
         if 'weight' in data:
             hint['weight'] = weight
 
-        save_questions(questions)
+        update_question_in_list(question_id, question)
 
         return jsonify({
             'success': True,
@@ -1568,21 +1357,16 @@ def update_hint(question_id, hint_id):
 def delete_hint(question_id, hint_id):
     """API endpoint to delete a hint"""
     try:
-        # Load questions and find the target question
-        questions = load_questions(include_deleted=True)
-        question = next((q for q in questions if q.get('id') == question_id), None)
-        
+        # Get the question and hint
+        question, hint = get_question_and_hint(question_id, hint_id)
         if not question:
             return jsonify({'success': False, 'error': 'Question not found'}), 404
-
-        # Find the hint to delete
-        hint = next((h for h in question.get('hints', []) if h.get('id') == hint_id), None)
         if not hint:
             return jsonify({'success': False, 'error': 'Hint not found'}), 404
 
         # Remove the hint
         question['hints'].remove(hint)
-        save_questions(questions)
+        update_question_in_list(question_id, question)
 
         return jsonify({
             'success': True
@@ -1593,104 +1377,20 @@ def delete_hint(question_id, hint_id):
 @app.route('/api/quiz_tags', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_quiz_tags():
     """API endpoint to manage quiz tags"""
-    tags = load_quiz_tags()
-    
-    if request.method == 'GET':
-        # Return all tags
-        return jsonify(tags)
-        
-    elif request.method == 'POST':
-        # Add a new tag
-        data = request.get_json()
-        if not data or 'display_name' not in data:
-            return jsonify({'success': False, 'error': 'No display name provided'}), 400
-            
-        # Create a safe ID from the display name
-        tag_id = data.get('id', data['display_name'].lower().replace(' ', '_'))
-        
-        # Check if the tag already exists
-        if any(tag['id'] == tag_id for tag in tags):
-            return jsonify({'success': False, 'error': 'Tag ID already exists'}), 400
-            
-        # Add the new tag
-        new_tag = {
-            'id': tag_id,
-            'display_name': data['display_name']
-        }
-        tags.append(new_tag)
-        save_quiz_tags(tags)
-        
-        return jsonify({'success': True, 'tag': new_tag})
-        
-    elif request.method == 'PUT':
-        # Update a tag's display name
-        data = request.get_json()
-        if not data or 'id' not in data or 'display_name' not in data:
-            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
-            
-        # Find the tag to update
-        tag_to_update = next((tag for tag in tags if tag['id'] == data['id']), None)
-        if not tag_to_update:
-            return jsonify({'success': False, 'error': 'Tag not found'}), 404
-            
-        # Update the display name
-        tag_to_update['display_name'] = data['display_name']
-        save_quiz_tags(tags)
-        
-        return jsonify({'success': True, 'tag': tag_to_update})
-        
-    elif request.method == 'DELETE':
-        # Delete a tag
-        data = request.get_json()
-        if not data or 'id' not in data:
-            return jsonify({'success': False, 'error': 'No tag ID provided'}), 400
-            
-        # Check if the tag exists
-        tag_to_delete = next((tag for tag in tags if tag['id'] == data['id']), None)
-        if not tag_to_delete:
-            return jsonify({'success': False, 'error': 'Tag not found'}), 404
-            
-        # Remove the tag
-        tags.remove(tag_to_delete)
-        save_quiz_tags(tags)
-        
-        # Also need to remove this tag from all quizzes
-        quizzes = load_quizzes()
-        updated = False
-        for quiz in quizzes:
-            if 'tags' in quiz and data['id'] in quiz['tags']:
-                quiz['tags'].remove(data['id'])
-                updated = True
-        
-        if updated:
-            save_quizzes(quizzes)
-            
-        return jsonify({'success': True})
-    
-    return jsonify({'success': False, 'error': 'Invalid request method'}), 405 
+    return handle_tag_management(request, load_quiz_tags, save_quiz_tags, is_quiz_tags=True) 
 
-@app.route('/quizzes/<quiz_id>/delete', methods=['GET', 'POST'])
-def delete_quiz(quiz_id):
+@app.route('/quizzes/<quiz_id>/<action>', methods=['GET', 'POST'])
+def quiz_action(quiz_id, action):
     quizzes = load_quizzes()
     quiz = next((q for q in quizzes if q['id'] == quiz_id), None)
     
     if not quiz:
         flash('Quiz not found.', 'danger')
-    else:
+    elif action == 'delete':
         quiz['deleted'] = True
         save_quizzes(quizzes)
         flash('Quiz deleted successfully.', 'success')
-    
-    return redirect(url_for('quizzes'))
-
-@app.route('/quizzes/<quiz_id>/restore', methods=['GET', 'POST'])
-def restore_quiz(quiz_id):
-    quizzes = load_quizzes()
-    quiz = next((q for q in quizzes if q['id'] == quiz_id), None)
-    
-    if not quiz:
-        flash('Quiz not found.', 'danger')
-    else:
+    elif action == 'restore':
         quiz['deleted'] = False
         save_quizzes(quizzes)
         flash('Quiz restored successfully.', 'success')

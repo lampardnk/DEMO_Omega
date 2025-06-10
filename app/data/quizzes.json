@@ -1,13 +1,30 @@
 [
     {
-        "id": "9cca7d49-2e24-4b91-8d52-0e50fe41bda4",
+        "id": "abc276c2-d2f6-4be9-9a13-e0e48a6a37ad",
         "name": "test",
-        "tags": [],
-        "question_ids": [
-            "1fad844e-f30f-4c6f-ba31-b8212a3b6137",
-            "eb45ecc8-8407-4751-bbe5-aea43291e5f5"
+        "tags": [
+            "beginner",
+            "practice"
         ],
-        "created_at": "2025-06-09 10:36:53",
+        "question_ids": [
+            "0dffbb65-cd63-4343-8b23-ebe90e23aa3b",
+            "f0a81a2b-605b-4bc2-9a01-ad9fcec2b376"
+        ],
+        "created_at": "2025-06-10 18:56:06",
+        "deleted": true
+    },
+    {
+        "id": "e4e2f013-1f9c-4476-a6dc-6d9412c17494",
+        "name": "test quiz",
+        "tags": [
+            "beginner",
+            "practice"
+        ],
+        "question_ids": [
+            "0dffbb65-cd63-4343-8b23-ebe90e23aa3b",
+            "f0a81a2b-605b-4bc2-9a01-ad9fcec2b376"
+        ],
+        "created_at": "2025-06-10 19:03:40",
         "deleted": false
     }
 ]
